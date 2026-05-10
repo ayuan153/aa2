@@ -71,6 +71,20 @@ effective_attack_point = base_attack_point * (100 / total_attack_speed)
 
 ---
 
+## Damage Variance
+
+```
+attack_damage = uniform_random(base_damage_min + primary_attr, base_damage_max + primary_attr)
+```
+
+- True uniform distribution (not pseudo-random)
+- Rolled independently per attack at frontswing completion
+- base_damage_min/max are fixed per hero (do not change with levels)
+- Primary attribute and bonus damage are added AFTER the roll (shift the range, don't widen it)
+- Chaos Knight has the widest spread (20 points); most heroes have 2-6 point spread
+
+---
+
 ## Projectiles
 
 ```
@@ -106,6 +120,27 @@ armor_from_agi = agi * 0.167
 ```
 
 **Edge case:** At armor = 0, multiplier = 1.0 (no reduction). Formula is continuous through zero.
+
+---
+
+## Damage Block (Innate Melee)
+
+All melee heroes have innate physical damage block:
+
+```
+proc_chance = 0.50
+blocked_damage = 16
+
+// Applied BEFORE armor reduction:
+if defender.is_melee AND rng.chance(0.50):
+    raw_damage = max(0, raw_damage - 16)
+actual_damage = raw_damage * armor_multiplier
+```
+
+- Uses true random (not pseudo-random distribution)
+- Stacks with item-based damage block (Vanguard, etc.) — highest block value checked first
+- Does NOT apply to magical or pure damage
+- Works against both melee and ranged attackers
 
 ---
 

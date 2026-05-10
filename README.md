@@ -1,15 +1,15 @@
 # AA2 — Ability Arena 2
 
 <!-- Badges -->
-![Status](https://img.shields.io/badge/status-Phase%200%20Foundation-blue)
+![Status](https://img.shields.io/badge/status-Phase%201%20Combat%20Fidelity-blue)
 ![Rust](https://img.shields.io/badge/rust-stable-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 A standalone cross-platform autobattler inspired by the Dota 2 mod Ability Arena. Eight players compete in a free-for-all, picking gods, drafting hero bodies, and equipping abilities to outlast their opponents.
 
-## Status: Phase 0 (Foundation)
+## Status: Phase 0 Complete ✓ — Now in Phase 1 (Combat Fidelity)
 
-Core simulation crate scaffolding and data schema design.
+Core combat simulation operational with Dota2-fidelity attack timing, damage variance, armor reduction, damage block, projectile system, and targeting AI. 7 heroes with real Dota2 stats.
 
 ## Tech Stack
 
@@ -50,9 +50,17 @@ cargo build
 cargo test
 ```
 
-### Run Dev Mode (coming soon)
+### Run Dev Mode
 
-Local simulation runner with placeholder art and CLI output.
+```bash
+cargo run --bin aa2-dev
+# Or with specific heroes:
+cargo run --bin aa2-dev -- data/heroes/sven.ron data/heroes/drow.ron
+```
+
+## Heroes Available
+
+Warrior, Ranger, Sven, Drow Ranger, Chaos Knight, Juggernaut, Crystal Maiden
 
 ## Game Overview
 

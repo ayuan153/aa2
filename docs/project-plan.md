@@ -6,7 +6,7 @@ Solo-dev project (with AI agent assistance). Cross-platform autobattler with Dot
 
 ---
 
-## Phase 0: Foundation + Dev Mode (Weeks 1–4)
+## Phase 0: Foundation + Dev Mode (Weeks 1–4) ✓ COMPLETE
 
 | Week | Focus |
 |------|-------|
@@ -28,19 +28,32 @@ Solo-dev project (with AI agent assistance). Cross-platform autobattler with Dot
 - Damage reduced by armor formula: `multiplier = 1 - (0.06 * armor) / (1 + 0.06 * |armor|)`
 - FFI bridge works on macOS and iOS simulator
 
+**Completed:** All success criteria met. Combat simulation operational with:
+- Attribute system (STR/AGI/INT → HP, mana, armor, AS, damage)
+- Attack loop with BAT formula, frontswing timing, damage variance (min/max roll)
+- Armor reduction, innate melee damage block (50% × 16)
+- Projectile system (homing, speed-based travel)
+- Turn rate, targeting AI, movement
+- Base magic resistance (25%)
+- Seeded RNG (xoshiro128++) for deterministic replays
+- Dev CLI binary with tick-by-tick combat log
+- 7 heroes with real Dota2 stats (Sven, Drow, CK, Jugg, CM + 2 generic)
+
 ---
 
-## Phase 1: Combat Fidelity (Weeks 5–12)
+## Phase 1: Combat Fidelity (Weeks 5–12) ← CURRENT
+
+*Already completed from Phase 0 overflow: attribute system, projectile system, turn rate, targeting AI.*
 
 | Week | Focus |
 |------|-------|
-| 5–6 | Full attribute system (STR/AGI/INT → derived stats) |
-| 7 | Turn rate, cast points, attack animations (frontswing/backswing) |
-| 8 | Projectile system (homing, speed-based travel time) |
-| 9 | Buff/debuff framework (stacking, duration, tick effects, dispel types) |
-| 10 | AoE system (circle, cone, line), damage types (physical/magical/pure) |
-| 11 | Targeting AI (acquisition range, aggro, priority), grid pathfinding |
-| 12 | DEV MODE: 5v5 bot draft, 8-board view, hot-reload data, replay system |
+| 5–6 | Buff/debuff framework (stacking, duration, tick effects, dispel) |
+| 7 | Cast system (cast point, mana cost, cooldown, channeling) |
+| 8 | Ability execution engine (read AbilityDef, execute effects) |
+| 9 | AoE system (circle, cone, line), damage types (magical/pure now functional) |
+| 10 | Advanced targeting (unit-targeted vs ground-targeted abilities) |
+| 11 | Multi-unit combat (5v5), pathfinding with collision avoidance |
+| 12 | Replay system, hot-reload, dev mode with bot draft |
 
 **Deliverables:**
 - Complete combat simulation matching Dota2 mechanics
