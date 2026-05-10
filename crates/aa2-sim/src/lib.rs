@@ -36,6 +36,33 @@ pub enum CombatEvent {
     RoundEnd { tick: u32, winning_team: u8 },
 }
 
+/// Simple xorshift32 RNG for deterministic damage rolls.
+#[derive(Debug, Clone)]
+struct Rng {
+    state: u32,
+}
+
+impl Rng {
+    fn new(seed: u32) -> Self {
+        Self { state: if seed == 0 { 1 } else { seed } }
+    }
+
+    /// Returns a random u32.
+    fn next_u32(&mut self) -> u32 {
+        self.state ^= self.state << 13;
+        self.state ^= self.state >> 17;
+        self.state ^= self.state << 5;
+        self.state
+    }
+
+    /// Returns a uniform random f32 in [min, max].
+    fn range_f32(&mut self, min: f32, max: f32) -> f32 {
+        if min >= max { return min; }
+        let t = (self.next_u32() as f64) / (u32::MAX as f64);
+        min + (max - min) * t as f32
+    }
+}
+
 /// The core simulation state.
 pub struct Simulation {
     /// All units in the simulation.
@@ -50,11 +77,18 @@ pub struct Simulation {
     finished: bool,
     /// Winning team if finished.
     winner: Option<u8>,
+    /// RNG for damage variance.
+    rng: Rng,
 }
 
 impl Simulation {
     /// Create a new simulation with the given units.
     pub fn new(units: Vec<Unit>) -> Self {
+        Self::with_seed(units, 42)
+    }
+
+    /// Create a new simulation with a specific RNG seed (for reproducibility).
+    pub fn with_seed(units: Vec<Unit>, seed: u32) -> Self {
         Self {
             units,
             projectiles: Vec::new(),
@@ -62,6 +96,7 @@ impl Simulation {
             combat_log: Vec::new(),
             finished: false,
             winner: None,
+            rng: Rng::new(seed),
         }
     }
 
@@ -135,7 +170,7 @@ impl Simulation {
                 if self.units[i].attack_timer <= 0.0 {
                     // Attack completes — deal damage or spawn projectile
                     let attacker_id = self.units[i].id;
-                    let raw_dmg = self.units[i].attack_damage;
+                    let raw_dmg = self.rng.range_f32(self.units[i].damage_min, self.units[i].damage_max);
                     let is_melee = self.units[i].is_melee;
                     let proj_speed = self.units[i].projectile_speed.unwrap_or(900.0);
                     let attacker_pos = self.units[i].position;
@@ -336,7 +371,8 @@ mod tests {
             collision_radius: 24.0,
             tier: 1,
             is_melee: true,
-            base_damage: 30.0,
+            base_damage_min: 28.0,
+            base_damage_max: 32.0,
             projectile_speed: None,
         }
     }
@@ -359,7 +395,8 @@ mod tests {
             collision_radius: 24.0,
             tier: 1,
             is_melee: false,
-            base_damage: 25.0,
+            base_damage_min: 23.0,
+            base_damage_max: 27.0,
             projectile_speed: Some(900.0),
         }
     }
@@ -374,14 +411,15 @@ mod tests {
 
     #[test]
     fn test_attribute_derivation() {
-        let stats = derive_stats(25.0, 15.0, 10.0, &Attribute::Strength, 0.0, 30.0);
+        let stats = derive_stats(25.0, 15.0, 10.0, &Attribute::Strength, 0.0, 28.0, 32.0);
         assert!((stats.max_hp - (120.0 + 25.0 * 22.0)).abs() < 0.01);
         assert!((stats.max_mana - (75.0 + 10.0 * 12.0)).abs() < 0.01);
         assert!((stats.hp_regen - (0.25 + 25.0 * 0.1)).abs() < 0.01);
         assert!((stats.mana_regen - (0.0 + 10.0 * 0.05)).abs() < 0.01);
         assert!((stats.armor - (0.0 + 15.0 * 0.167)).abs() < 0.01);
         assert!((stats.total_attack_speed - 115.0).abs() < 0.01);
-        assert!((stats.attack_damage - 55.0).abs() < 0.01); // base_damage 30 + primary STR 25
+        assert!((stats.damage_min - 53.0).abs() < 0.01); // base_min 28 + primary STR 25
+        assert!((stats.damage_max - 57.0).abs() < 0.01); // base_max 32 + primary STR 25
     }
 
     #[test]
@@ -451,9 +489,11 @@ mod tests {
         assert!(first_attack.is_some(), "Expected an attack event");
 
         if let Some(CombatEvent::Attack { damage, .. }) = first_attack {
-            // damage = 55.0 (base 30 + STR 25) * damage_multiplier(armor of target)
-            let expected = apply_armor(55.0, sim.units[1].armor);
-            assert!((*damage - expected).abs() < 0.01);
+            // damage should be in range [damage_min, damage_max] * armor_multiplier
+            let min_expected = apply_armor(53.0, sim.units[1].armor); // 28 + 25 STR
+            let max_expected = apply_armor(57.0, sim.units[1].armor); // 32 + 25 STR
+            assert!(*damage >= min_expected - 0.01 && *damage <= max_expected + 0.01,
+                "Damage {damage} not in expected range [{min_expected}, {max_expected}]");
         }
     }
 

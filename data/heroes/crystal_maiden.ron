@@ -1,0 +1,23 @@
+// Crystal Maiden - Rylai (Dota2 patch 7.41c)
+// INT ranged support with slow move speed and moderate damage
+HeroDef(
+    name: "Crystal Maiden",
+    primary_attribute: Intelligence,
+    base_str: 17.0,
+    base_agi: 16.0,
+    base_int: 20.0,
+    str_gain: 2.2,
+    agi_gain: 1.8,
+    int_gain: 3.3,
+    base_attack_time: 1.7,
+    attack_range: 600.0,      // Ranged
+    attack_point: 0.45,
+    move_speed: 280.0,        // Slowest in the game
+    turn_rate: 0.6,
+    collision_radius: 27.0,
+    tier: 1,
+    is_melee: false,
+    base_damage_min: 28.0,    // 48 total min - 20 INT = 28 raw
+    base_damage_max: 34.0,    // 54 total max - 20 INT = 34 raw
+    projectile_speed: Some(900.0),
+)

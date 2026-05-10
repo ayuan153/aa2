@@ -17,6 +17,7 @@ HeroDef(
     collision_radius: 24.0,
     tier: 1,
     is_melee: true,
-    base_damage: 30.0,        // Raw base damage before STR bonus
+    base_damage_min: 28.0,        // Raw base damage min before STR bonus
+    base_damage_max: 32.0,        // Raw base damage max before STR bonus
     projectile_speed: None,
 )

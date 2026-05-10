@@ -54,8 +54,10 @@ pub struct Unit {
     pub mana_regen: f32,
     /// Armor value (can be negative).
     pub armor: f32,
-    /// Attack damage per hit.
-    pub attack_damage: f32,
+    /// Minimum attack damage per hit.
+    pub damage_min: f32,
+    /// Maximum attack damage per hit.
+    pub damage_max: f32,
     /// Time between attacks in seconds.
     pub attack_interval: f32,
     /// Effective frontswing duration in seconds.
@@ -92,11 +94,12 @@ pub struct DerivedStats {
     pub mana_regen: f32,
     pub armor: f32,
     pub total_attack_speed: f32,
-    pub attack_damage: f32,
+    pub damage_min: f32,
+    pub damage_max: f32,
 }
 
 /// Derive combat stats from STR/AGI/INT and bonus attack speed.
-pub fn derive_stats(str_val: f32, agi_val: f32, int_val: f32, primary: &Attribute, bonus_as: f32, base_damage: f32) -> DerivedStats {
+pub fn derive_stats(str_val: f32, agi_val: f32, int_val: f32, primary: &Attribute, bonus_as: f32, base_damage_min: f32, base_damage_max: f32) -> DerivedStats {
     let primary_val = match primary {
         Attribute::Strength => str_val,
         Attribute::Agility => agi_val,
@@ -109,7 +112,8 @@ pub fn derive_stats(str_val: f32, agi_val: f32, int_val: f32, primary: &Attribut
         mana_regen: BASE_MANA_REGEN + int_val * 0.05,
         armor: BASE_ARMOR + agi_val * 0.167,
         total_attack_speed: (100.0 + agi_val + bonus_as).clamp(20.0, 700.0),
-        attack_damage: base_damage + primary_val,
+        damage_min: base_damage_min + primary_val,
+        damage_max: base_damage_max + primary_val,
     }
 }
 
@@ -127,7 +131,7 @@ impl Unit {
     /// Create a Unit from a HeroDef, team, position, and unique id.
     /// Uses base attributes at level 1 with no items.
     pub fn from_hero_def(def: &HeroDef, id: u32, team: u8, position: Vec2) -> Self {
-        let stats = derive_stats(def.base_str, def.base_agi, def.base_int, &def.primary_attribute, 0.0, def.base_damage);
+        let stats = derive_stats(def.base_str, def.base_agi, def.base_int, &def.primary_attribute, 0.0, def.base_damage_min, def.base_damage_max);
         let attack_interval = compute_attack_interval(def.base_attack_time, stats.total_attack_speed);
         let attack_point = compute_effective_attack_point(def.attack_point, stats.total_attack_speed);
         let projectile_speed = if def.is_melee { None } else { def.projectile_speed.or(Some(900.0)) };
@@ -142,7 +146,8 @@ impl Unit {
             hp_regen: stats.hp_regen,
             mana_regen: stats.mana_regen,
             armor: stats.armor,
-            attack_damage: stats.attack_damage,
+            damage_min: stats.damage_min,
+            damage_max: stats.damage_max,
             attack_interval,
             attack_point,
             attack_range: def.attack_range,

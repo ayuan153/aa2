@@ -1,0 +1,23 @@
+// Chaos Knight - Nessaj (Dota2 patch 7.41c)
+// STR melee with the highest damage variance in the game (20-point spread)
+HeroDef(
+    name: "Chaos Knight",
+    primary_attribute: Strength,
+    base_str: 24.0,
+    base_agi: 18.0,
+    base_int: 18.0,
+    str_gain: 3.1,
+    agi_gain: 1.8,
+    int_gain: 1.2,
+    base_attack_time: 1.7,
+    attack_range: 150.0,      // Melee
+    attack_point: 0.5,
+    move_speed: 325.0,
+    turn_rate: 0.6,
+    collision_radius: 27.0,
+    tier: 3,
+    is_melee: true,
+    base_damage_min: 32.0,    // 56 total min - 24 STR = 32 raw
+    base_damage_max: 52.0,    // 76 total max - 24 STR = 52 raw (20-point spread!)
+    projectile_speed: None,
+)
