@@ -54,6 +54,8 @@ pub struct Unit {
     pub mana_regen: f32,
     /// Armor value (can be negative).
     pub armor: f32,
+    /// Magic resistance (0.25 = 25% base for heroes). Stacks multiplicatively.
+    pub magic_resistance: f32,
     /// Minimum attack damage per hit.
     pub damage_min: f32,
     /// Maximum attack damage per hit.
@@ -146,6 +148,7 @@ impl Unit {
             hp_regen: stats.hp_regen,
             mana_regen: stats.mana_regen,
             armor: stats.armor,
+            magic_resistance: 0.25,
             damage_min: stats.damage_min,
             damage_max: stats.damage_max,
             attack_interval,
