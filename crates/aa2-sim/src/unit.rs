@@ -1,4 +1,4 @@
-use aa2_data::{Attribute, HeroDef};
+use aa2_data::{Attribute, HeroDef, UnitConfig};
 use crate::vec2::Vec2;
 use crate::buff::Buff;
 use crate::cast::{AbilityState, CastInProgress};
@@ -183,5 +183,18 @@ impl Unit {
     /// Whether this unit is alive.
     pub fn is_alive(&self) -> bool {
         self.state != UnitState::Dead && self.hp > 0.0
+    }
+
+    /// Create a Unit from a `UnitConfig`, applying hero stats and equipping abilities.
+    pub fn from_config(config: &UnitConfig, id: u32, team: u8, position: Vec2) -> Self {
+        let mut unit = Self::from_hero_def(&config.hero, id, team, position);
+        for (ability_def, level) in &config.abilities {
+            unit.abilities.push(AbilityState {
+                def: ability_def.clone(),
+                cooldown_remaining: 0.0,
+                level: *level,
+            });
+        }
+        unit
     }
 }

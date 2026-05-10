@@ -1,0 +1,7 @@
+Loadout(
+    hero: "sven",
+    abilities: [
+        ("fireball", 3),
+        ("war_cry", 1),
+    ],
+)

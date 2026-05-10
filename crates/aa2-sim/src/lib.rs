@@ -15,7 +15,7 @@ pub mod ai;
 
 use vec2::Vec2;
 use unit::{Unit, UnitState, ACQUISITION_RANGE, ACTION_THRESHOLD};
-use aa2_data::HeroDef;
+use aa2_data::{HeroDef, UnitConfig};
 use projectile::Projectile;
 use combat::apply_armor;
 use buff::{tick_buffs, active_status};
@@ -187,6 +187,24 @@ impl Simulation {
         for (i, def) in team_b.iter().enumerate() {
             let x = if team_b.len() == 1 { 0.0 } else { -200.0 + 400.0 * i as f32 / (team_b.len() - 1) as f32 };
             units.push(Unit::from_hero_def(def, id, 1, Vec2::new(x, 600.0)));
+            id += 1;
+        }
+        Self::with_seed(units, seed)
+    }
+
+    /// Create a simulation from two teams of `UnitConfig`s.
+    /// Team A at y=0, team B at y=600, spread along x=-200..200.
+    pub fn from_configs(team_a: &[UnitConfig], team_b: &[UnitConfig], seed: u32) -> Self {
+        let mut units = Vec::new();
+        let mut id = 0u32;
+        for (i, config) in team_a.iter().enumerate() {
+            let x = if team_a.len() == 1 { 0.0 } else { -200.0 + 400.0 * i as f32 / (team_a.len() - 1) as f32 };
+            units.push(Unit::from_config(config, id, 0, Vec2::new(x, 0.0)));
+            id += 1;
+        }
+        for (i, config) in team_b.iter().enumerate() {
+            let x = if team_b.len() == 1 { 0.0 } else { -200.0 + 400.0 * i as f32 / (team_b.len() - 1) as f32 };
+            units.push(Unit::from_config(config, id, 1, Vec2::new(x, 600.0)));
             id += 1;
         }
         Self::with_seed(units, seed)
@@ -951,5 +969,66 @@ mod tests {
         let has_attack = sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Attack { attacker_id: 0, .. }));
         assert!(!has_cast, "Silenced unit should not cast");
         assert!(has_attack, "Silenced unit should still auto-attack");
+    }
+
+    #[test]
+    fn test_unit_from_config() {
+        use aa2_data::{AbilityDef, DamageType, Effect, TargetType, UnitConfig};
+
+        let hero = make_warrior();
+        let ability1 = AbilityDef {
+            name: "Fireball".to_string(),
+            cooldown: 10.0,
+            mana_cost: 100.0,
+            cast_point: 0.3,
+            targeting: TargetType::SingleEnemy,
+            effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0, 150.0, 200.0] }],
+            description: String::new(),
+            aoe_shape: None,
+            cast_range: 600.0,
+        };
+        let ability2 = AbilityDef {
+            name: "War Cry".to_string(),
+            cooldown: 30.0,
+            mana_cost: 50.0,
+            cast_point: 0.2,
+            targeting: TargetType::NoTarget,
+            effects: vec![Effect::ApplyBuff { name: "War Cry".to_string(), duration: 6.0 }],
+            description: String::new(),
+            aoe_shape: None,
+            cast_range: 600.0,
+        };
+
+        let config = UnitConfig::new(hero)
+            .with_ability(ability1, 2)
+            .with_ability(ability2, 1);
+
+        let unit = Unit::from_config(&config, 0, 0, Vec2::new(0.0, 0.0));
+        assert_eq!(unit.abilities.len(), 2);
+        assert_eq!(unit.abilities[0].def.name, "Fireball");
+        assert_eq!(unit.abilities[0].level, 2);
+        assert_eq!(unit.abilities[1].def.name, "War Cry");
+        assert_eq!(unit.abilities[1].level, 1);
+        assert_eq!(unit.abilities[0].cooldown_remaining, 0.0);
+    }
+
+    #[test]
+    fn test_loadout_resolve() {
+        use aa2_data::{load_loadout, resolve_loadout};
+        use std::path::Path;
+
+        let loadout = load_loadout(Path::new("../../data/loadouts/sven_nuker.ron")).unwrap();
+        assert_eq!(loadout.hero, "sven");
+        assert_eq!(loadout.abilities.len(), 2);
+        assert_eq!(loadout.abilities[0], ("fireball".to_string(), 3));
+        assert_eq!(loadout.abilities[1], ("war_cry".to_string(), 1));
+
+        let config = resolve_loadout(&loadout, Path::new("../../data")).unwrap();
+        assert_eq!(config.hero.name, "Sven");
+        assert_eq!(config.abilities.len(), 2);
+        assert_eq!(config.abilities[0].0.name, "Fireball");
+        assert_eq!(config.abilities[0].1, 3);
+        assert_eq!(config.abilities[1].0.name, "War Cry");
+        assert_eq!(config.abilities[1].1, 1);
     }
 }

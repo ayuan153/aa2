@@ -112,8 +112,49 @@ pub struct ItemDef {
     pub stat_bonuses: StatBonuses,
 }
 
+/// A fully-configured unit ready for combat.
+/// Bridge between game systems (draft) and simulation.
+#[derive(Debug, Clone)]
+pub struct UnitConfig {
+    /// The hero definition for this unit.
+    pub hero: HeroDef,
+    /// Equipped abilities with their levels.
+    pub abilities: Vec<(AbilityDef, u8)>,
+    /// Number of ability slots available.
+    pub slot_count: u8,
+}
+
+impl UnitConfig {
+    /// Create a new UnitConfig with just a hero and no abilities.
+    pub fn new(hero: HeroDef) -> Self {
+        Self { hero, abilities: Vec::new(), slot_count: 4 }
+    }
+
+    /// Add an ability at the given level.
+    pub fn with_ability(mut self, ability: AbilityDef, level: u8) -> Self {
+        self.abilities.push((ability, level));
+        self
+    }
+}
+
+/// A loadout file specifying a hero + equipped abilities for dev/testing.
+/// Ability and hero names are resolved to file paths at load time.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Loadout {
+    /// Hero name (resolved to data/heroes/{name}.ron).
+    pub hero: String,
+    /// Ability names with levels (resolved to data/abilities/{name}.ron).
+    pub abilities: Vec<(String, u8)>,
+}
+
 /// Loads a single `HeroDef` from a `.ron` file at the given path.
 pub fn load_hero_def(path: &std::path::Path) -> Result<HeroDef, String> {
+    let contents = std::fs::read_to_string(path).map_err(|e| format!("{path:?}: {e}"))?;
+    ron::from_str(&contents).map_err(|e| format!("{path:?}: {e}"))
+}
+
+/// Loads a single `AbilityDef` from a `.ron` file at the given path.
+pub fn load_ability_def(path: &std::path::Path) -> Result<AbilityDef, String> {
     let contents = std::fs::read_to_string(path).map_err(|e| format!("{path:?}: {e}"))?;
     ron::from_str(&contents).map_err(|e| format!("{path:?}: {e}"))
 }
@@ -129,4 +170,23 @@ pub fn load_all_heroes(dir: &std::path::Path) -> Result<Vec<HeroDef>, String> {
         }
     }
     Ok(heroes)
+}
+
+/// Load a `Loadout` from a `.ron` file.
+pub fn load_loadout(path: &std::path::Path) -> Result<Loadout, String> {
+    let contents = std::fs::read_to_string(path).map_err(|e| format!("{path:?}: {e}"))?;
+    ron::from_str(&contents).map_err(|e| format!("{path:?}: {e}"))
+}
+
+/// Resolve a `Loadout` into a `UnitConfig` by loading hero and ability files from `data_dir`.
+pub fn resolve_loadout(loadout: &Loadout, data_dir: &std::path::Path) -> Result<UnitConfig, String> {
+    let hero_path = data_dir.join("heroes").join(format!("{}.ron", loadout.hero));
+    let hero = load_hero_def(&hero_path)?;
+    let mut config = UnitConfig::new(hero);
+    for (ability_name, level) in &loadout.abilities {
+        let ability_path = data_dir.join("abilities").join(format!("{}.ron", ability_name));
+        let ability = load_ability_def(&ability_path)?;
+        config.abilities.push((ability, *level));
+    }
+    Ok(config)
 }

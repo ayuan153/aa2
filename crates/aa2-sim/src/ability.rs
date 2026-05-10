@@ -105,9 +105,9 @@ pub fn execute_ability(
     events
 }
 
-/// Get value from a per-level array, clamping to last element if level exceeds length.
+/// Get value from a per-level array. Level is 1-indexed (level 1 = base[0]).
 fn value_at_level(base: &[f32], level: u8) -> f32 {
-    let idx = (level as usize).min(base.len().saturating_sub(1));
+    let idx = (level.saturating_sub(1) as usize).min(base.len().saturating_sub(1));
     base[idx]
 }
 
@@ -170,7 +170,7 @@ mod tests {
 
         let hp_before = units[1].hp;
         let armor = units[1].armor;
-        let events = execute_ability(&ability, 0, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
+        let events = execute_ability(&ability, 1, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
 
         let expected_dmg = apply_armor(100.0, armor);
         assert!((hp_before - units[1].hp - expected_dmg).abs() < 0.01);
@@ -192,7 +192,7 @@ mod tests {
 
         let hp_before = units[1].hp;
         let mr = units[1].magic_resistance; // 0.25
-        execute_ability(&ability, 0, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
+        execute_ability(&ability, 1, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
 
         let expected_dmg = apply_magic_resistance(200.0, mr);
         assert!((hp_before - units[1].hp - expected_dmg).abs() < 0.01);
@@ -213,7 +213,7 @@ mod tests {
         }]);
 
         let hp_before = units[1].hp;
-        execute_ability(&ability, 0, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
+        execute_ability(&ability, 1, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
 
         assert!((hp_before - units[1].hp - 100.0).abs() < 0.01);
     }
@@ -229,14 +229,14 @@ mod tests {
         units[1].hp = 100.0;
         let ability = make_ability(vec![Effect::Heal { base: vec![50.0, 75.0, 100.0] }]);
 
-        let events = execute_ability(&ability, 1, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
+        let events = execute_ability(&ability, 2, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
 
         assert!((units[1].hp - 175.0).abs() < 0.01);
         assert!(matches!(&events[0], CombatEvent::Heal { amount, .. } if (*amount - 75.0).abs() < 0.01));
 
         // Test cap at max_hp
         units[1].hp = units[1].max_hp - 10.0;
-        let events = execute_ability(&ability, 1, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 20);
+        let events = execute_ability(&ability, 2, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 20);
         assert!((units[1].hp - units[1].max_hp).abs() < 0.01);
         assert!(matches!(&events[0], CombatEvent::Heal { amount, .. } if (*amount - 10.0).abs() < 0.01));
     }
@@ -253,7 +253,7 @@ mod tests {
             duration: 3.0,
         }]);
 
-        let events = execute_ability(&ability, 0, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
+        let events = execute_ability(&ability, 1, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10);
 
         assert_eq!(units[1].buffs.len(), 1);
         assert_eq!(units[1].buffs[0].name, "slow");

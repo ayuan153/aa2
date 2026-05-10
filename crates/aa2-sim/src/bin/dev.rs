@@ -20,6 +20,12 @@ fn main() {
 fn run() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
 
+    if args.iter().any(|a| a == "--5v5-loadout") {
+        return run_5v5_loadout(&args);
+    }
+    if args.iter().any(|a| a == "--loadout") {
+        return run_loadout(&args);
+    }
     if args.iter().any(|a| a == "--5v5") {
         return run_5v5();
     }
@@ -71,6 +77,70 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
+/// Run a 1v1 or 2-loadout simulation via `--loadout <file1> <file2>`.
+fn run_loadout(args: &[String]) -> Result<(), String> {
+    let loadout_idx = args.iter().position(|a| a == "--loadout").unwrap();
+    let paths: Vec<&str> = args[loadout_idx + 1..].iter().map(|s| s.as_str()).collect();
+    if paths.len() < 2 {
+        return Err("--loadout requires at least 2 loadout file paths".to_string());
+    }
+
+    let data_dir = Path::new("data");
+    let config_a = aa2_sim::aa2_data::resolve_loadout(
+        &aa2_sim::aa2_data::load_loadout(Path::new(paths[0]))?, data_dir)?;
+    let config_b = aa2_sim::aa2_data::resolve_loadout(
+        &aa2_sim::aa2_data::load_loadout(Path::new(paths[1]))?, data_dir)?;
+
+    println!("=== AA2 Dev Loadout Combat ===");
+    println!("{} (team 0) vs {} (team 1)\n", config_a.hero.name, config_b.hero.name);
+
+    let mut names: HashMap<u32, String> = HashMap::new();
+    names.insert(0, config_a.hero.name.clone());
+    names.insert(1, config_b.hero.name.clone());
+
+    let mut sim = Simulation::from_configs(&[config_a], &[config_b], 42);
+    run_sim(&mut sim, &names);
+    Ok(())
+}
+
+/// Run a 5v5 loadout simulation via `--5v5-loadout <file1> ... <file10>`.
+fn run_5v5_loadout(args: &[String]) -> Result<(), String> {
+    let loadout_idx = args.iter().position(|a| a == "--5v5-loadout").unwrap();
+    let paths: Vec<&str> = args[loadout_idx + 1..].iter().map(|s| s.as_str()).collect();
+    if paths.len() < 2 || paths.len() > 10 {
+        return Err("--5v5-loadout requires 2-10 loadout file paths (first half team A, second half team B)".to_string());
+    }
+
+    let data_dir = Path::new("data");
+    let mid = paths.len() / 2;
+    let mut team_a = Vec::new();
+    let mut team_b = Vec::new();
+    for p in &paths[..mid] {
+        team_a.push(aa2_sim::aa2_data::resolve_loadout(
+            &aa2_sim::aa2_data::load_loadout(Path::new(p))?, data_dir)?);
+    }
+    for p in &paths[mid..] {
+        team_b.push(aa2_sim::aa2_data::resolve_loadout(
+            &aa2_sim::aa2_data::load_loadout(Path::new(p))?, data_dir)?);
+    }
+
+    println!("=== AA2 Dev 5v5 Loadout Combat ===");
+    println!("Team A: {}", team_a.iter().map(|c| c.hero.name.as_str()).collect::<Vec<_>>().join(", "));
+    println!("Team B: {}\n", team_b.iter().map(|c| c.hero.name.as_str()).collect::<Vec<_>>().join(", "));
+
+    let mut names: HashMap<u32, String> = HashMap::new();
+    for (i, c) in team_a.iter().enumerate() {
+        names.insert(i as u32, format!("{}[A]", c.hero.name));
+    }
+    for (i, c) in team_b.iter().enumerate() {
+        names.insert((i + team_a.len()) as u32, format!("{}[B]", c.hero.name));
+    }
+
+    let mut sim = Simulation::from_configs(&team_a, &team_b, 42);
+    run_sim(&mut sim, &names);
+    Ok(())
+}
+
 /// Run a 5v5 simulation with all available heroes.
 fn run_5v5() -> Result<(), String> {
     let heroes = aa2_sim::aa2_data::load_all_heroes(Path::new("data/heroes/"))?;
@@ -95,14 +165,19 @@ fn run_5v5() -> Result<(), String> {
     }
 
     let mut sim = Simulation::new_5v5(&team_a, &team_b, 42);
-    let mut log_cursor = 0;
+    run_sim(&mut sim, &names);
+    Ok(())
+}
 
+/// Run a simulation to completion and print events + summary.
+fn run_sim(sim: &mut Simulation, names: &HashMap<u32, String>) {
+    let mut log_cursor = 0;
     let max_ticks = 5000;
     for _ in 0..max_ticks {
         if sim.is_finished() { break; }
         sim.step();
         for event in &sim.combat_log[log_cursor..] {
-            print_event(event, &names, &sim.units);
+            print_event(event, names, &sim.units);
         }
         log_cursor = sim.combat_log.len();
     }
@@ -110,8 +185,7 @@ fn run_5v5() -> Result<(), String> {
     println!("\n=== Summary ===");
     println!("Total ticks: {} ({:.2}s)", sim.tick, sim.tick as f32 / TICK_RATE);
     if let Some(team) = sim.winner() {
-        let team_label = if team == 0 { "A" } else { "B" };
-        println!("Winner: Team {team_label}");
+        println!("Winner: Team {team}");
         println!("Survivors:");
         for unit in sim.units.iter().filter(|u| u.team == team && u.is_alive()) {
             let name = names.get(&unit.id).map_or("???", |n| n.as_str());
@@ -120,8 +194,6 @@ fn run_5v5() -> Result<(), String> {
     } else {
         println!("Result: Draw");
     }
-
-    Ok(())
 }
 
 /// Print a single combat event in human-readable format.

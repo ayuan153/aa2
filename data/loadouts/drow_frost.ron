@@ -1,0 +1,6 @@
+Loadout(
+    hero: "drow",
+    abilities: [
+        ("fireball", 2),
+    ],
+)
