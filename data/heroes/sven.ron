@@ -1,0 +1,22 @@
+// Sven - Rogue Knight (Dota2 patch 7.41c)
+// STR melee carry with high base damage and slow BAT
+HeroDef(
+    name: "Sven",
+    primary_attribute: Strength,
+    base_str: 24.0,
+    base_agi: 18.0,
+    base_int: 16.0,
+    str_gain: 3.5,
+    agi_gain: 2.2,
+    int_gain: 1.5,
+    base_attack_time: 1.9,    // Slower than default 1.7
+    attack_range: 150.0,      // Melee
+    attack_point: 0.4,        // Frontswing
+    move_speed: 325.0,
+    turn_rate: 0.6,
+    collision_radius: 27.0,
+    tier: 2,
+    is_melee: true,
+    base_damage: 37.0,        // (36+38)/2 raw base damage
+    projectile_speed: None,
+)

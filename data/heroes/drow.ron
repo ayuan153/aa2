@@ -1,0 +1,22 @@
+// Drow Ranger - Traxex (Dota2 patch 7.41c)
+// AGI ranged carry with fast BAT and long range
+HeroDef(
+    name: "Drow Ranger",
+    primary_attribute: Agility,
+    base_str: 16.0,
+    base_agi: 24.0,
+    base_int: 15.0,
+    str_gain: 1.9,
+    agi_gain: 2.8,
+    int_gain: 1.4,
+    base_attack_time: 1.7,    // Standard BAT
+    attack_range: 625.0,      // Long range
+    attack_point: 0.5,        // Slower frontswing than Sven
+    move_speed: 310.0,
+    turn_rate: 0.7,
+    collision_radius: 27.0,
+    tier: 2,
+    is_melee: false,
+    base_damage: 30.5,        // (27+34)/2 raw base damage
+    projectile_speed: Some(1250.0),
+)

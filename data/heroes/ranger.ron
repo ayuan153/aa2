@@ -17,4 +17,6 @@ HeroDef(
     collision_radius: 24.0,
     tier: 2,
     is_melee: false,
+    base_damage: 25.0,        // Raw base damage before AGI bonus
+    projectile_speed: Some(1100.0),
 )

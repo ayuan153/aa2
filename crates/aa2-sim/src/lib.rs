@@ -336,6 +336,8 @@ mod tests {
             collision_radius: 24.0,
             tier: 1,
             is_melee: true,
+            base_damage: 30.0,
+            projectile_speed: None,
         }
     }
 
@@ -357,6 +359,8 @@ mod tests {
             collision_radius: 24.0,
             tier: 1,
             is_melee: false,
+            base_damage: 25.0,
+            projectile_speed: Some(900.0),
         }
     }
 
@@ -370,14 +374,14 @@ mod tests {
 
     #[test]
     fn test_attribute_derivation() {
-        let stats = derive_stats(25.0, 15.0, 10.0, &Attribute::Strength, 0.0);
+        let stats = derive_stats(25.0, 15.0, 10.0, &Attribute::Strength, 0.0, 30.0);
         assert!((stats.max_hp - (120.0 + 25.0 * 22.0)).abs() < 0.01);
         assert!((stats.max_mana - (75.0 + 10.0 * 12.0)).abs() < 0.01);
         assert!((stats.hp_regen - (0.25 + 25.0 * 0.1)).abs() < 0.01);
         assert!((stats.mana_regen - (0.0 + 10.0 * 0.05)).abs() < 0.01);
         assert!((stats.armor - (0.0 + 15.0 * 0.167)).abs() < 0.01);
         assert!((stats.total_attack_speed - 115.0).abs() < 0.01);
-        assert!((stats.attack_damage - 25.0).abs() < 0.01); // primary = STR
+        assert!((stats.attack_damage - 55.0).abs() < 0.01); // base_damage 30 + primary STR 25
     }
 
     #[test]
@@ -447,8 +451,8 @@ mod tests {
         assert!(first_attack.is_some(), "Expected an attack event");
 
         if let Some(CombatEvent::Attack { damage, .. }) = first_attack {
-            // damage = 25.0 * damage_multiplier(armor of target)
-            let expected = apply_armor(25.0, sim.units[1].armor);
+            // damage = 55.0 (base 30 + STR 25) * damage_multiplier(armor of target)
+            let expected = apply_armor(55.0, sim.units[1].armor);
             assert!((*damage - expected).abs() < 0.01);
         }
     }

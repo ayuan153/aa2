@@ -56,6 +56,10 @@ pub struct HeroDef {
     pub collision_radius: f32,
     pub tier: u8,
     pub is_melee: bool,
+    /// Raw base damage (before primary attribute bonus). Average of min/max.
+    pub base_damage: f32,
+    /// Projectile speed for ranged heroes (units/sec). Ignored for melee.
+    pub projectile_speed: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

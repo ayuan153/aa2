@@ -96,7 +96,7 @@ pub struct DerivedStats {
 }
 
 /// Derive combat stats from STR/AGI/INT and bonus attack speed.
-pub fn derive_stats(str_val: f32, agi_val: f32, int_val: f32, primary: &Attribute, bonus_as: f32) -> DerivedStats {
+pub fn derive_stats(str_val: f32, agi_val: f32, int_val: f32, primary: &Attribute, bonus_as: f32, base_damage: f32) -> DerivedStats {
     let primary_val = match primary {
         Attribute::Strength => str_val,
         Attribute::Agility => agi_val,
@@ -109,7 +109,7 @@ pub fn derive_stats(str_val: f32, agi_val: f32, int_val: f32, primary: &Attribut
         mana_regen: BASE_MANA_REGEN + int_val * 0.05,
         armor: BASE_ARMOR + agi_val * 0.167,
         total_attack_speed: (100.0 + agi_val + bonus_as).clamp(20.0, 700.0),
-        attack_damage: BASE_DAMAGE + primary_val,
+        attack_damage: base_damage + primary_val,
     }
 }
 
@@ -127,10 +127,10 @@ impl Unit {
     /// Create a Unit from a HeroDef, team, position, and unique id.
     /// Uses base attributes at level 1 with no items.
     pub fn from_hero_def(def: &HeroDef, id: u32, team: u8, position: Vec2) -> Self {
-        let stats = derive_stats(def.base_str, def.base_agi, def.base_int, &def.primary_attribute, 0.0);
+        let stats = derive_stats(def.base_str, def.base_agi, def.base_int, &def.primary_attribute, 0.0, def.base_damage);
         let attack_interval = compute_attack_interval(def.base_attack_time, stats.total_attack_speed);
         let attack_point = compute_effective_attack_point(def.attack_point, stats.total_attack_speed);
-        let projectile_speed = if def.is_melee { None } else { Some(900.0) }; // default ranged projectile speed
+        let projectile_speed = if def.is_melee { None } else { def.projectile_speed.or(Some(900.0)) };
 
         Self {
             id,
