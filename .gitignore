@@ -1,0 +1,9 @@
+/target
+*.swp
+*.swo
+.DS_Store
+/client/Library/
+/client/Temp/
+/client/Logs/
+/client/Builds/
+*.meta

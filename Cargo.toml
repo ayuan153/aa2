@@ -1,0 +1,13 @@
+[workspace]
+members = ["crates/aa2-sim", "crates/aa2-data"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["ayuan153"]
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+ron = "0.8"
