@@ -1,0 +1,15 @@
+// War Cry - no-target buff that empowers nearby allies
+AbilityDef(
+    name: "War Cry",
+    cooldown: 30.0,
+    mana_cost: 100.0,
+    cast_point: 0.2,       // Quick cast animation
+    targeting: NoTarget,
+    effects: [
+        ApplyBuff(
+            name: "War Cry",
+            duration: 6.0, // Buff lasts 6 seconds
+        ),
+    ],
+    description: "Lets out a battle cry, buffing nearby allied units.",
+)

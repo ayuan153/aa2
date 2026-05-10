@@ -1,0 +1,6 @@
+// Forge Lord - a god focused on defense and summoning
+GodDef(
+    name: "Forge Lord",
+    passive_description: "Allied units gain +3 armor",
+    active_description: "Summon a golem with 1000 HP",
+)
