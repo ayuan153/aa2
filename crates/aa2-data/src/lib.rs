@@ -94,3 +94,22 @@ pub struct ItemDef {
     pub effects: Vec<Effect>,
     pub stat_bonuses: StatBonuses,
 }
+
+/// Loads a single `HeroDef` from a `.ron` file at the given path.
+pub fn load_hero_def(path: &std::path::Path) -> Result<HeroDef, String> {
+    let contents = std::fs::read_to_string(path).map_err(|e| format!("{path:?}: {e}"))?;
+    ron::from_str(&contents).map_err(|e| format!("{path:?}: {e}"))
+}
+
+/// Loads all `HeroDef`s from `.ron` files in the given directory.
+pub fn load_all_heroes(dir: &std::path::Path) -> Result<Vec<HeroDef>, String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("{dir:?}: {e}"))?;
+    let mut heroes = Vec::new();
+    for entry in entries {
+        let path = entry.map_err(|e| format!("{dir:?}: {e}"))?.path();
+        if path.extension().is_some_and(|ext| ext == "ron") {
+            heroes.push(load_hero_def(&path)?);
+        }
+    }
+    Ok(heroes)
+}
