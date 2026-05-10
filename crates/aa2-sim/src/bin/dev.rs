@@ -19,6 +19,11 @@ fn main() {
 /// Run the simulation and print results.
 fn run() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
+
+    if args.iter().any(|a| a == "--5v5") {
+        return run_5v5();
+    }
+
     let hero1_path = args.get(1).map_or("data/heroes/warrior.ron", |s| s.as_str());
     let hero2_path = args.get(2).map_or("data/heroes/ranger.ron", |s| s.as_str());
 
@@ -61,6 +66,59 @@ fn run() -> Result<(), String> {
         }
     } else {
         println!("Result: Draw (both teams eliminated)");
+    }
+
+    Ok(())
+}
+
+/// Run a 5v5 simulation with all available heroes.
+fn run_5v5() -> Result<(), String> {
+    let heroes = aa2_sim::aa2_data::load_all_heroes(Path::new("data/heroes/"))?;
+    if heroes.is_empty() {
+        return Err("No hero files found in data/heroes/".to_string());
+    }
+
+    // Build teams: first 5 for A, next 5 for B (cycling if fewer than 10)
+    let team_a: Vec<_> = (0..5).map(|i| heroes[i % heroes.len()].clone()).collect();
+    let team_b: Vec<_> = (0..5).map(|i| heroes[(i + 5) % heroes.len()].clone()).collect();
+
+    println!("=== AA2 Dev 5v5 Combat ===");
+    println!("Team A: {}", team_a.iter().map(|h| h.name.as_str()).collect::<Vec<_>>().join(", "));
+    println!("Team B: {}\n", team_b.iter().map(|h| h.name.as_str()).collect::<Vec<_>>().join(", "));
+
+    let mut names: HashMap<u32, String> = HashMap::new();
+    for (i, def) in team_a.iter().enumerate() {
+        names.insert(i as u32, format!("{}[A]", def.name));
+    }
+    for (i, def) in team_b.iter().enumerate() {
+        names.insert((i + 5) as u32, format!("{}[B]", def.name));
+    }
+
+    let mut sim = Simulation::new_5v5(&team_a, &team_b, 42);
+    let mut log_cursor = 0;
+
+    let max_ticks = 5000;
+    for _ in 0..max_ticks {
+        if sim.is_finished() { break; }
+        sim.step();
+        for event in &sim.combat_log[log_cursor..] {
+            print_event(event, &names, &sim.units);
+        }
+        log_cursor = sim.combat_log.len();
+    }
+
+    println!("\n=== Summary ===");
+    println!("Total ticks: {} ({:.2}s)", sim.tick, sim.tick as f32 / TICK_RATE);
+    if let Some(team) = sim.winner() {
+        let team_label = if team == 0 { "A" } else { "B" };
+        println!("Winner: Team {team_label}");
+        println!("Survivors:");
+        for unit in sim.units.iter().filter(|u| u.team == team && u.is_alive()) {
+            let name = names.get(&unit.id).map_or("???", |n| n.as_str());
+            println!("  {name}: {:.1}/{:.1} HP", unit.hp, unit.max_hp);
+        }
+    } else {
+        println!("Result: Draw");
     }
 
     Ok(())

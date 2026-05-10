@@ -76,6 +76,14 @@ pub struct AbilityDef {
     /// Shape of the AoE for `PointAoE` abilities. `None` for non-AoE abilities.
     #[serde(default)]
     pub aoe_shape: Option<AoeShape>,
+    /// Maximum range at which this ability can be cast.
+    #[serde(default = "default_cast_range")]
+    pub cast_range: f32,
+}
+
+/// Default cast range for abilities (600 units).
+fn default_cast_range() -> f32 {
+    600.0
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

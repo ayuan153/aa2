@@ -89,6 +89,7 @@ mod tests {
             effects: vec![],
             description: String::new(),
             aoe_shape: None,
+            cast_range: 600.0,
         }
     }
 

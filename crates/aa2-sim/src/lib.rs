@@ -11,9 +11,11 @@ pub mod buff;
 pub mod cast;
 pub mod ability;
 pub mod aoe;
+pub mod ai;
 
 use vec2::Vec2;
 use unit::{Unit, UnitState, ACQUISITION_RANGE, ACTION_THRESHOLD};
+use aa2_data::HeroDef;
 use projectile::Projectile;
 use combat::apply_armor;
 use buff::{tick_buffs, active_status};
@@ -125,6 +127,34 @@ pub struct Simulation {
     rng: Rng,
 }
 
+/// Apply simple separation force to prevent unit stacking.
+/// For each pair of living units within collision distance, push them apart.
+pub fn apply_separation(units: &mut [Unit]) {
+    let len = units.len();
+    for i in 0..len {
+        for j in (i + 1)..len {
+            if !units[i].is_alive() || !units[j].is_alive() {
+                continue;
+            }
+            let min_dist = units[i].collision_radius + units[j].collision_radius;
+            let dist = units[i].position.distance(units[j].position);
+            if dist < min_dist {
+                let overlap = min_dist - dist;
+                let dir = if dist > 1e-6 {
+                    (units[j].position - units[i].position).normalize()
+                } else {
+                    // Perfectly overlapping: push apart using deterministic offset based on IDs
+                    let angle = (i as f32) * 1.2566; // ~72 degrees apart
+                    Vec2::new(angle.cos(), angle.sin())
+                };
+                let push = dir.scale(overlap * 0.5);
+                units[i].position = units[i].position - push;
+                units[j].position = units[j].position + push;
+            }
+        }
+    }
+}
+
 impl Simulation {
     /// Create a new simulation with the given units.
     pub fn new(units: Vec<Unit>) -> Self {
@@ -142,6 +172,24 @@ impl Simulation {
             winner: None,
             rng: Rng::new(seed),
         }
+    }
+
+    /// Create a 5v5 simulation from two teams of hero definitions.
+    /// Team A is placed at y=0, team B at y=600, spread evenly along x=-200..200.
+    pub fn new_5v5(team_a: &[HeroDef], team_b: &[HeroDef], seed: u32) -> Self {
+        let mut units = Vec::new();
+        let mut id = 0u32;
+        for (i, def) in team_a.iter().enumerate() {
+            let x = if team_a.len() == 1 { 0.0 } else { -200.0 + 400.0 * i as f32 / (team_a.len() - 1) as f32 };
+            units.push(Unit::from_hero_def(def, id, 0, Vec2::new(x, 0.0)));
+            id += 1;
+        }
+        for (i, def) in team_b.iter().enumerate() {
+            let x = if team_b.len() == 1 { 0.0 } else { -200.0 + 400.0 * i as f32 / (team_b.len() - 1) as f32 };
+            units.push(Unit::from_hero_def(def, id, 1, Vec2::new(x, 600.0)));
+            id += 1;
+        }
+        Self::with_seed(units, seed)
     }
 
     /// Whether the simulation has ended.
@@ -165,6 +213,7 @@ impl Simulation {
         self.step_buffs();
         self.step_casts();
         self.step_units();
+        apply_separation(&mut self.units);
         self.step_projectiles();
         self.check_deaths();
         self.check_round_end();
@@ -262,6 +311,25 @@ impl Simulation {
 
             // Skip units that are casting
             if self.units[i].cast_state.is_some() { continue; }
+
+            // Try to cast an ability before falling through to auto-attack
+            if let Some((ability_index, target_id, target_pos)) = ai::try_find_cast(&self.units[i], &self.units) {
+                let cast_time = self.units[i].abilities[ability_index].def.cast_point;
+                let ability_name = self.units[i].abilities[ability_index].def.name.clone();
+                self.units[i].cast_state = Some(cast::CastInProgress {
+                    ability_index,
+                    target_id,
+                    target_pos,
+                    cast_time_remaining: cast_time,
+                });
+                self.units[i].state = UnitState::Casting;
+                events.push(CombatEvent::CastStart {
+                    tick: self.tick,
+                    caster_id: self.units[i].id,
+                    ability_name,
+                });
+                continue;
+            }
 
             // Targeting
             self.update_target(i);
@@ -731,5 +799,157 @@ mod tests {
             matches!(e, CombatEvent::Attack { attacker_id: 1, .. })
         }).count();
         assert!(u1_attacks > 0, "Non-stunned unit should attack");
+    }
+
+    #[test]
+    fn test_unit_casts_ability() {
+        use aa2_data::{AbilityDef, DamageType, Effect, TargetType};
+        use crate::cast::AbilityState;
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
+
+        u0.abilities.push(AbilityState {
+            def: AbilityDef {
+                name: "Fireball".to_string(),
+                cooldown: 10.0,
+                mana_cost: 50.0,
+                cast_point: 0.3,
+                targeting: TargetType::SingleEnemy,
+                effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
+                description: String::new(),
+                aoe_shape: None,
+                cast_range: 600.0,
+            },
+            cooldown_remaining: 0.0,
+            level: 0,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+        // Run a few ticks — unit should begin casting
+        for _ in 0..5 {
+            sim.step();
+        }
+        assert!(sim.combat_log.iter().any(|e| matches!(e, CombatEvent::CastStart { ability_name, .. } if ability_name == "Fireball")));
+    }
+
+    #[test]
+    fn test_unit_prefers_ability_over_attack() {
+        use aa2_data::{AbilityDef, DamageType, Effect, TargetType};
+        use crate::cast::AbilityState;
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
+
+        u0.abilities.push(AbilityState {
+            def: AbilityDef {
+                name: "Smash".to_string(),
+                cooldown: 10.0,
+                mana_cost: 50.0,
+                cast_point: 0.3,
+                targeting: TargetType::SingleEnemy,
+                effects: vec![Effect::Damage { kind: DamageType::Physical, base: vec![200.0] }],
+                description: String::new(),
+                aoe_shape: None,
+                cast_range: 600.0,
+            },
+            cooldown_remaining: 0.0,
+            level: 0,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+        for _ in 0..5 {
+            sim.step();
+        }
+        // Should have cast start but no attack
+        let has_cast = sim.combat_log.iter().any(|e| matches!(e, CombatEvent::CastStart { .. }));
+        let has_attack = sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Attack { attacker_id: 0, .. }));
+        assert!(has_cast, "Unit should cast ability");
+        assert!(!has_attack, "Unit should not auto-attack when ability is ready");
+    }
+
+    #[test]
+    fn test_unit_attacks_when_ability_on_cooldown() {
+        use aa2_data::{AbilityDef, DamageType, Effect, TargetType};
+        use crate::cast::AbilityState;
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
+
+        u0.abilities.push(AbilityState {
+            def: AbilityDef {
+                name: "Fireball".to_string(),
+                cooldown: 10.0,
+                mana_cost: 50.0,
+                cast_point: 0.3,
+                targeting: TargetType::SingleEnemy,
+                effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
+                description: String::new(),
+                aoe_shape: None,
+                cast_range: 600.0,
+            },
+            cooldown_remaining: 5.0, // on cooldown
+            level: 0,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+        for _ in 0..60 {
+            sim.step();
+        }
+        // Should have attacked, not cast
+        let has_cast = sim.combat_log.iter().any(|e| matches!(e, CombatEvent::CastStart { .. }));
+        let has_attack = sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Attack { attacker_id: 0, .. }));
+        assert!(!has_cast, "Unit should not cast when ability on cooldown");
+        assert!(has_attack, "Unit should fall back to auto-attack");
+    }
+
+    #[test]
+    fn test_unit_cannot_cast_when_silenced() {
+        use aa2_data::{AbilityDef, DamageType, Effect, TargetType};
+        use crate::cast::AbilityState;
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags};
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
+
+        u0.abilities.push(AbilityState {
+            def: AbilityDef {
+                name: "Fireball".to_string(),
+                cooldown: 10.0,
+                mana_cost: 50.0,
+                cast_point: 0.3,
+                targeting: TargetType::SingleEnemy,
+                effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
+                description: String::new(),
+                aoe_shape: None,
+                cast_range: 600.0,
+            },
+            cooldown_remaining: 0.0,
+            level: 0,
+        });
+
+        u0.buffs.push(Buff {
+            name: "silence".to_string(),
+            remaining_ticks: 300, // long silence
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::BasicDispel,
+            status: StatusFlags { silenced: true, ..StatusFlags::default() },
+            stat_modifier: None,
+            source_id: 1,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+        for _ in 0..60 {
+            sim.step();
+        }
+        let has_cast = sim.combat_log.iter().any(|e| matches!(e, CombatEvent::CastStart { .. }));
+        let has_attack = sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Attack { attacker_id: 0, .. }));
+        assert!(!has_cast, "Silenced unit should not cast");
+        assert!(has_attack, "Silenced unit should still auto-attack");
     }
 }
