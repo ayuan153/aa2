@@ -7,7 +7,7 @@ pub enum Attribute {
     Intelligence,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum DamageType {
     Physical,
     Magical,
@@ -73,6 +73,9 @@ pub struct AbilityDef {
     pub targeting: TargetType,
     pub effects: Vec<Effect>,
     pub description: String,
+    /// Shape of the AoE for `PointAoE` abilities. `None` for non-AoE abilities.
+    #[serde(default)]
+    pub aoe_shape: Option<AoeShape>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

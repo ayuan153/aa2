@@ -7,11 +7,17 @@ pub mod vec2;
 pub mod unit;
 pub mod projectile;
 pub mod combat;
+pub mod buff;
+pub mod cast;
+pub mod ability;
+pub mod aoe;
 
 use vec2::Vec2;
 use unit::{Unit, UnitState, ACQUISITION_RANGE, ACTION_THRESHOLD};
 use projectile::Projectile;
 use combat::apply_armor;
+use buff::{tick_buffs, active_status};
+use cast::{tick_cooldowns, tick_cast, CastTickResult};
 
 /// Simulation tick rate (ticks per second).
 pub const TICK_RATE: f32 = 30.0;
@@ -34,6 +40,18 @@ pub enum CombatEvent {
     Death { tick: u32, unit_id: u32 },
     /// The round ended with a winner.
     RoundEnd { tick: u32, winning_team: u8 },
+    /// A buff was applied to a unit.
+    BuffApplied { tick: u32, target_id: u32, name: String },
+    /// A buff expired on a unit.
+    BuffExpired { tick: u32, target_id: u32, name: String },
+    /// A unit began casting an ability.
+    CastStart { tick: u32, caster_id: u32, ability_name: String },
+    /// A unit completed casting an ability.
+    CastComplete { tick: u32, caster_id: u32, ability_name: String },
+    /// An ability dealt damage to a target.
+    AbilityDamage { tick: u32, caster_id: u32, target_id: u32, ability_name: String, damage: f32, damage_type: aa2_data::DamageType },
+    /// A unit was healed by an ability.
+    Heal { tick: u32, target_id: u32, amount: f32 },
 }
 
 /// Xoshiro128++ RNG for deterministic damage rolls.
@@ -144,6 +162,8 @@ impl Simulation {
         self.tick += 1;
 
         self.step_regen();
+        self.step_buffs();
+        self.step_casts();
         self.step_units();
         self.step_projectiles();
         self.check_deaths();
@@ -158,6 +178,76 @@ impl Simulation {
         }
     }
 
+    fn step_buffs(&mut self) {
+        let tick = self.tick;
+        let mut events = Vec::new();
+        for unit in self.units.iter_mut() {
+            if !unit.is_alive() { continue; }
+            let result = tick_buffs(&mut unit.buffs);
+            if result.damage > 0.0 {
+                unit.hp -= result.damage;
+            }
+            if result.healing > 0.0 {
+                unit.hp = (unit.hp + result.healing).min(unit.max_hp);
+            }
+            for name in result.expired {
+                events.push(CombatEvent::BuffExpired { tick, target_id: unit.id, name });
+            }
+        }
+        self.combat_log.extend(events);
+    }
+
+    fn step_casts(&mut self) {
+        let tick = self.tick;
+        let mut events = Vec::new();
+        let unit_count = self.units.len();
+        for i in 0..unit_count {
+            if !self.units[i].is_alive() { continue; }
+            // Tick cooldowns
+            tick_cooldowns(&mut self.units[i].abilities);
+            // Save cast target info before tick_cast potentially clears it
+            let cast_target = self.units[i].cast_state.as_ref().map(|c| (c.target_id, c.target_pos));
+            // Process active cast — split borrow by extracting cast_state temporarily
+            let status = active_status(&self.units[i].buffs);
+            let disabled = status.stunned || status.hexed;
+            let mut cast_state = self.units[i].cast_state.take();
+            let result = tick_cast(&mut cast_state, &self.units[i].abilities, disabled);
+            self.units[i].cast_state = cast_state;
+            match result {
+                CastTickResult::Completed { ability_index, mana_cost } => {
+                    self.units[i].mana -= mana_cost;
+                    self.units[i].abilities[ability_index].cooldown_remaining = self.units[i].abilities[ability_index].def.cooldown;
+                    let ability_def = self.units[i].abilities[ability_index].def.clone();
+                    let level = self.units[i].abilities[ability_index].level;
+                    let caster_id = self.units[i].id;
+                    let caster_team = self.units[i].team;
+                    let caster_pos = self.units[i].position;
+                    let (target_id, target_pos) = cast_target.unwrap_or((None, None));
+
+                    let name = ability_def.name.clone();
+                    events.push(CombatEvent::CastComplete { tick, caster_id, ability_name: name });
+
+                    // Execute ability effects
+                    let ability_events = ability::execute_ability(
+                        &ability_def, level, caster_id, caster_team, caster_pos,
+                        target_id, target_pos, &mut self.units, tick,
+                    );
+                    events.extend(ability_events);
+
+                    self.units[i].state = UnitState::Idle;
+                }
+                CastTickResult::Casting => {
+                    self.units[i].state = UnitState::Casting;
+                }
+                CastTickResult::Interrupted => {
+                    self.units[i].state = UnitState::Idle;
+                }
+                CastTickResult::None => {}
+            }
+        }
+        self.combat_log.extend(events);
+    }
+
     fn step_units(&mut self) {
         let mut new_projectiles: Vec<Projectile> = Vec::new();
         let mut events: Vec<CombatEvent> = Vec::new();
@@ -165,6 +255,13 @@ impl Simulation {
         let unit_count = self.units.len();
         for i in 0..unit_count {
             if !self.units[i].is_alive() { continue; }
+
+            // Check status effects
+            let status = active_status(&self.units[i].buffs);
+            if status.stunned || status.hexed { continue; } // skip all actions
+
+            // Skip units that are casting
+            if self.units[i].cast_state.is_some() { continue; }
 
             // Targeting
             self.update_target(i);
@@ -235,6 +332,7 @@ impl Simulation {
 
             // Movement
             if dist > self.units[i].attack_range {
+                if status.rooted { continue; } // cannot move
                 self.move_toward(i, target_pos);
                 self.units[i].state = UnitState::Moving;
                 continue;
@@ -242,6 +340,7 @@ impl Simulation {
 
             // In range, cooldown expired — begin attack
             if self.units[i].attack_timer <= 0.0 {
+                if status.disarmed { continue; } // cannot attack
                 self.units[i].state = UnitState::Attacking;
                 self.units[i].attack_timer = self.units[i].attack_point;
             } else {
@@ -592,5 +691,45 @@ mod tests {
         // Verify death event exists
         assert!(sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Death { .. })));
         assert!(sim.combat_log.iter().any(|e| matches!(e, CombatEvent::RoundEnd { .. })));
+    }
+
+    #[test]
+    fn test_stunned_unit_cannot_attack() {
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags};
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
+
+        // Apply a 60-tick stun to unit 0
+        u0.buffs.push(Buff {
+            name: "stun".to_string(),
+            remaining_ticks: 60,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::BasicDispel,
+            status: StatusFlags { stunned: true, ..StatusFlags::default() },
+            stat_modifier: None,
+            source_id: 1,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+
+        // Run for 60 ticks (stun duration)
+        for _ in 0..60 {
+            sim.step();
+        }
+
+        // Unit 0 should not have attacked during stun
+        let u0_attacks = sim.combat_log.iter().filter(|e| {
+            matches!(e, CombatEvent::Attack { attacker_id: 0, .. })
+        }).count();
+        assert_eq!(u0_attacks, 0, "Stunned unit should not attack");
+
+        // Unit 1 should have attacked
+        let u1_attacks = sim.combat_log.iter().filter(|e| {
+            matches!(e, CombatEvent::Attack { attacker_id: 1, .. })
+        }).count();
+        assert!(u1_attacks > 0, "Non-stunned unit should attack");
     }
 }

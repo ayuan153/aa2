@@ -63,4 +63,9 @@ impl Vec2 {
     pub fn scale(self, s: f32) -> Self {
         Self { x: self.x * s, y: self.y * s }
     }
+
+    /// Dot product of two vectors.
+    pub fn dot(self, other: Self) -> f32 {
+        self.x * other.x + self.y * other.y
+    }
 }

@@ -1,5 +1,7 @@
 use aa2_data::{Attribute, HeroDef};
 use crate::vec2::Vec2;
+use crate::buff::Buff;
+use crate::cast::{AbilityState, CastInProgress};
 
 /// Base HP added to all units before attribute scaling.
 pub const BASE_HP: f32 = 120.0;
@@ -29,6 +31,8 @@ pub enum UnitState {
     Moving,
     /// In attack animation (frontswing or cooldown).
     Attacking,
+    /// In ability cast animation.
+    Casting,
     /// Dead.
     Dead,
 }
@@ -86,6 +90,12 @@ pub struct Unit {
     pub attack_timer: f32,
     /// Current target unit id.
     pub target: Option<u32>,
+    /// Active buffs/debuffs on this unit.
+    pub buffs: Vec<Buff>,
+    /// Equipped abilities with runtime state.
+    pub abilities: Vec<AbilityState>,
+    /// In-progress cast, if any.
+    pub cast_state: Option<CastInProgress>,
 }
 
 /// Derived combat stats from attributes.
@@ -164,6 +174,9 @@ impl Unit {
             state: UnitState::Idle,
             attack_timer: 0.0,
             target: None,
+            buffs: Vec::new(),
+            abilities: Vec::new(),
+            cast_state: None,
         }
     }
 

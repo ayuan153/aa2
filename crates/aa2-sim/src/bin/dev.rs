@@ -97,5 +97,24 @@ fn print_event(event: &CombatEvent, names: &HashMap<u32, String>, units: &[Unit]
                 .map_or("???", |n| n.as_str());
             println!("[tick {tick}] === ROUND END: Team {winning_team} ({winner_name}) wins! ===");
         }
+        CombatEvent::BuffApplied { tick, target_id, name: buff_name } => {
+            println!("[tick {tick}] {} gains buff: {buff_name}", name(*target_id));
+        }
+        CombatEvent::BuffExpired { tick, target_id, name: buff_name } => {
+            println!("[tick {tick}] {} loses buff: {buff_name}", name(*target_id));
+        }
+        CombatEvent::CastStart { tick, caster_id, ability_name } => {
+            println!("[tick {tick}] {} begins casting {ability_name}", name(*caster_id));
+        }
+        CombatEvent::CastComplete { tick, caster_id, ability_name } => {
+            println!("[tick {tick}] {} completes casting {ability_name}", name(*caster_id));
+        }
+        CombatEvent::AbilityDamage { tick, caster_id, target_id, ability_name, damage, damage_type } => {
+            println!("[tick {tick}] {} hits {} with {ability_name} for {damage:.1} {damage_type:?} damage",
+                name(*caster_id), name(*target_id));
+        }
+        CombatEvent::Heal { tick, target_id, amount } => {
+            println!("[tick {tick}] {} healed for {amount:.1}", name(*target_id));
+        }
     }
 }
