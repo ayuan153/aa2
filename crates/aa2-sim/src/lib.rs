@@ -36,30 +36,50 @@ pub enum CombatEvent {
     RoundEnd { tick: u32, winning_team: u8 },
 }
 
-/// Simple xorshift32 RNG for deterministic damage rolls.
+/// Xoshiro128++ RNG for deterministic damage rolls.
+/// We own this implementation to guarantee identical output across all platforms
+/// and Rust versions (no external crate can change the algorithm under us).
 #[derive(Debug, Clone)]
 struct Rng {
-    state: u32,
+    s: [u32; 4],
 }
 
 impl Rng {
     fn new(seed: u32) -> Self {
-        Self { state: if seed == 0 { 1 } else { seed } }
+        // SplitMix32 to expand a single seed into 4 state words
+        let mut z = seed;
+        let mut s = [0u32; 4];
+        for word in &mut s {
+            z = z.wrapping_add(0x9e3779b9);
+            let mut x = z;
+            x = (x ^ (x >> 16)).wrapping_mul(0x21f0aaad);
+            x = (x ^ (x >> 15)).wrapping_mul(0x735a2d97);
+            x ^= x >> 15;
+            *word = x;
+        }
+        Self { s }
     }
 
-    /// Returns a random u32.
+    /// Returns a random u32 using xoshiro128++.
     fn next_u32(&mut self) -> u32 {
-        self.state ^= self.state << 13;
-        self.state ^= self.state >> 17;
-        self.state ^= self.state << 5;
-        self.state
+        let result = (self.s[0].wrapping_add(self.s[3]))
+            .rotate_left(7)
+            .wrapping_add(self.s[0]);
+        let t = self.s[1] << 9;
+        self.s[2] ^= self.s[0];
+        self.s[3] ^= self.s[1];
+        self.s[1] ^= self.s[2];
+        self.s[0] ^= self.s[3];
+        self.s[2] ^= t;
+        self.s[3] = self.s[3].rotate_left(11);
+        result
     }
 
     /// Returns a uniform random f32 in [min, max].
     fn range_f32(&mut self, min: f32, max: f32) -> f32 {
         if min >= max { return min; }
-        let t = (self.next_u32() as f64) / (u32::MAX as f64);
-        min + (max - min) * t as f32
+        let t = (self.next_u32() >> 8) as f32 / (1u32 << 24) as f32; // 24-bit precision
+        min + (max - min) * t
     }
 }
 
