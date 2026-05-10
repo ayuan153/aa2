@@ -1,0 +1,7 @@
+[package]
+name = "aa2-sim"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aa2-data = { path = "../aa2-data" }
