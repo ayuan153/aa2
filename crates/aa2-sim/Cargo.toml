@@ -5,3 +5,7 @@ edition.workspace = true
 
 [dependencies]
 aa2-data = { path = "../aa2-data" }
+
+[[bin]]
+name = "aa2-dev"
+path = "src/bin/dev.rs"
