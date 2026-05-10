@@ -81,6 +81,12 @@ impl Rng {
         let t = (self.next_u32() >> 8) as f32 / (1u32 << 24) as f32; // 24-bit precision
         min + (max - min) * t
     }
+
+    /// Returns true with the given probability [0.0, 1.0].
+    fn chance(&mut self, probability: f32) -> bool {
+        let t = (self.next_u32() >> 8) as f32 / (1u32 << 24) as f32;
+        t < probability
+    }
 }
 
 /// The core simulation state.
@@ -194,8 +200,13 @@ impl Simulation {
                     let is_melee = self.units[i].is_melee;
                     let proj_speed = self.units[i].projectile_speed.unwrap_or(900.0);
                     let attacker_pos = self.units[i].position;
+                    let target_is_melee = self.units[target_idx].is_melee;
                     let armor = self.units[target_idx].armor;
-                    let actual_dmg = apply_armor(raw_dmg, armor);
+
+                    // Damage block (innate melee: 50% chance to block 16)
+                    let blocked = if target_is_melee && self.rng.chance(0.5) { 16.0_f32.min(raw_dmg) } else { 0.0 };
+                    let after_block = raw_dmg - blocked;
+                    let actual_dmg = apply_armor(after_block, armor);
 
                     if is_melee {
                         self.units[target_idx].hp -= actual_dmg;
@@ -205,7 +216,7 @@ impl Simulation {
                     } else {
                         let proj = Projectile {
                             target_id,
-                            damage: actual_dmg,
+                            damage: raw_dmg, // Store raw damage; block + armor applied on hit
                             position: attacker_pos,
                             speed: proj_speed,
                         };
@@ -304,11 +315,15 @@ impl Simulation {
             let travel = proj.speed * TICK_DURATION;
 
             if dist <= travel {
-                // Hit
+                // Hit — apply damage block and armor at impact
                 let target_idx = self.units.iter().position(|u| u.id == proj.target_id).unwrap();
-                self.units[target_idx].hp -= proj.damage;
+                let target_is_melee = self.units[target_idx].is_melee;
+                let armor = self.units[target_idx].armor;
+                let blocked = if target_is_melee && self.rng.chance(0.5) { 16.0_f32.min(proj.damage) } else { 0.0 };
+                let actual_dmg = apply_armor(proj.damage - blocked, armor);
+                self.units[target_idx].hp -= actual_dmg;
                 hit_events.push(CombatEvent::ProjectileHit {
-                    tick: self.tick, target_id: proj.target_id, damage: proj.damage,
+                    tick: self.tick, target_id: proj.target_id, damage: actual_dmg,
                 });
                 to_remove.push(pi);
             } else {
