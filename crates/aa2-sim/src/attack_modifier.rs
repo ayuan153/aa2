@@ -798,12 +798,12 @@ mod tests {
         let secondary_hp_before = secondary.hp;
 
         let mut sim = Simulation::with_seed(vec![attacker, target, secondary], 42);
-        // Run until an attack lands
-        for _ in 0..300 {
+        // Run until bounce projectile hits secondary (unit 2)
+        for _ in 0..600 {
+            if sim.is_finished() { break; }
             sim.step();
-            if sim.combat_log.iter().any(|e| matches!(e, CombatEvent::ProjectileHit { .. })) {
-                break;
-            }
+            let hit_on_secondary = sim.combat_log.iter().any(|e| matches!(e, CombatEvent::ProjectileHit { target_id: 2, .. }));
+            if hit_on_secondary { break; }
         }
         // Secondary target should have taken Glaives bounce damage
         let secondary_hp_after = sim.units[2].hp;

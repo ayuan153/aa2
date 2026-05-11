@@ -173,7 +173,19 @@ impl Unit {
     /// Create a Unit from a HeroDef, team, position, and unique id.
     /// Uses base attributes at level 1 with no items.
     pub fn from_hero_def(def: &HeroDef, id: u32, team: u8, position: Vec2) -> Self {
-        let stats = derive_stats(def.base_str, def.base_agi, def.base_int, &def.primary_attribute, 0.0, def.base_damage_min, def.base_damage_max);
+        Self::from_hero_def_at_level(def, id, team, position, 1)
+    }
+
+    /// Create a Unit from a HeroDef at a specific hero level.
+    /// Scales base attributes by level: base + (level-1) * gain.
+    pub fn from_hero_def_at_level(def: &HeroDef, id: u32, team: u8, position: Vec2, level: u8) -> Self {
+        let hero_level = level.max(1) as f32;
+        let level_bonus = hero_level - 1.0;
+        let base_str = def.base_str + def.str_gain * level_bonus;
+        let base_agi = def.base_agi + def.agi_gain * level_bonus;
+        let base_int = def.base_int + def.int_gain * level_bonus;
+
+        let stats = derive_stats(base_str, base_agi, base_int, &def.primary_attribute, 0.0, def.base_damage_min, def.base_damage_max);
         let attack_interval = compute_attack_interval(def.base_attack_time, stats.total_attack_speed);
         let attack_point = compute_effective_attack_point(def.attack_point, stats.total_attack_speed);
         let projectile_speed = if def.is_melee { None } else { def.projectile_speed.or(Some(900.0)) };
@@ -211,9 +223,9 @@ impl Unit {
             cast_state: None,
             prd_states: Vec::new(),
             attack_modifier_state: Vec::new(),
-            base_str: def.base_str,
-            base_agi: def.base_agi,
-            base_int: def.base_int,
+            base_str,
+            base_agi,
+            base_int,
             hero_base_damage_min: def.base_damage_min,
             hero_base_damage_max: def.base_damage_max,
             primary_attribute: def.primary_attribute.clone(),
@@ -229,7 +241,7 @@ impl Unit {
 
     /// Create a Unit from a `UnitConfig`, applying hero stats and equipping abilities.
     pub fn from_config(config: &UnitConfig, id: u32, team: u8, position: Vec2) -> Self {
-        let mut unit = Self::from_hero_def(&config.hero, id, team, position);
+        let mut unit = Self::from_hero_def_at_level(&config.hero, id, team, position, config.level);
         for (ability_def, level) in &config.abilities {
             unit.abilities.push(AbilityState {
                 def: ability_def.clone(),

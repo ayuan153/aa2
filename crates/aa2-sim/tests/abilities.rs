@@ -1510,3 +1510,243 @@ fn test_agi_hero_damage_increases_with_es_buff() {
     assert!((sim.units[0].damage_max - 80.0).abs() < 0.01,
         "AGI hero damage_max should increase with ES buffs: expected 80, got {:.1}", sim.units[0].damage_max);
 }
+
+#[test]
+fn test_hero_leveling_stats() {
+    // Juggernaut-like hero: STR=20, AGI=32, INT=14, gains 2.0/2.8/1.4
+    let hero = HeroDef {
+        name: "Juggernaut".to_string(),
+        primary_attribute: Attribute::Agility,
+        base_str: 20.0,
+        base_agi: 32.0,
+        base_int: 14.0,
+        str_gain: 2.0,
+        agi_gain: 2.8,
+        int_gain: 1.4,
+        base_attack_time: 1.4,
+        attack_range: 150.0,
+        attack_point: 0.33,
+        move_speed: 300.0,
+        turn_rate: 0.6,
+        collision_radius: 24.0,
+        tier: 1,
+        is_melee: true,
+        base_damage_min: 14.0,
+        base_damage_max: 18.0,
+        projectile_speed: None,
+    };
+
+    // Level 1: base stats unchanged
+    let u1 = Unit::from_hero_def_at_level(&hero, 0, 0, Vec2::new(0.0, 0.0), 1);
+    assert!((u1.base_str - 20.0).abs() < 0.01);
+    assert!((u1.base_agi - 32.0).abs() < 0.01);
+    assert!((u1.base_int - 14.0).abs() < 0.01);
+
+    // Level 20: base_str=20+19*2.0=58, base_agi=32+19*2.8=85.2, base_int=14+19*1.4=40.6
+    let u20 = Unit::from_hero_def_at_level(&hero, 0, 0, Vec2::new(0.0, 0.0), 20);
+    assert!((u20.base_str - 58.0).abs() < 0.01, "Expected STR 58, got {}", u20.base_str);
+    assert!((u20.base_agi - 85.2).abs() < 0.01, "Expected AGI 85.2, got {}", u20.base_agi);
+    assert!((u20.base_int - 40.6).abs() < 0.01, "Expected INT 40.6, got {}", u20.base_int);
+
+    // HP from STR: 120 + 58*22 = 1396
+    assert!((u20.max_hp - 1396.0).abs() < 0.01, "Expected max_hp 1396, got {}", u20.max_hp);
+
+    // Armor from AGI: 85.2 * 0.167 = 14.2284
+    assert!((u20.armor - 85.2 * 0.167).abs() < 0.01, "Expected armor {}, got {}", 85.2 * 0.167, u20.armor);
+
+    // Damage: primary is AGI, so damage_min = 14 + 85.2 = 99.2
+    assert!((u20.damage_min - 99.2).abs() < 0.01, "Expected damage_min 99.2, got {}", u20.damage_min);
+
+    // UnitConfig with level
+    let config = UnitConfig::new(hero).with_level(20);
+    let u_config = Unit::from_config(&config, 0, 0, Vec2::new(0.0, 0.0));
+    assert!((u_config.base_str - 58.0).abs() < 0.01);
+    assert!((u_config.base_agi - 85.2).abs() < 0.01);
+}
+
+#[test]
+fn test_glaives_bounce_applies_modifiers() {
+    // Melee unit with Glaives + Fury Swipes attacks primary target
+    // Bounce hits secondary target — verify secondary gets Fury Swipes stack
+    let hero = HeroDef {
+        name: "TestMelee".to_string(),
+        primary_attribute: Attribute::Intelligence,
+        base_str: 20.0,
+        base_agi: 20.0,
+        base_int: 40.0,
+        str_gain: 2.0,
+        agi_gain: 2.0,
+        int_gain: 3.0,
+        base_attack_time: 1.7,
+        attack_range: 150.0,
+        attack_point: 0.3,
+        move_speed: 300.0,
+        turn_rate: 0.6,
+        collision_radius: 24.0,
+        tier: 1,
+        is_melee: true,
+        base_damage_min: 20.0,
+        base_damage_max: 20.0,
+        projectile_speed: None,
+    };
+
+    let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    attacker.mana = 500.0;
+    attacker.abilities.push(AbilityState {
+        def: AbilityDef {
+            name: "Glaives".to_string(),
+            cooldown: vec![0.0],
+            mana_cost: vec![0.0],
+            cast_point: 0.0,
+            targeting: TargetType::Passive,
+            effects: vec![Effect::GlaivesOfWisdom {
+                int_damage_factor: vec![1.0],
+                mana_cost: vec![15.0],
+                steal_int_on_kill: vec![0.0],
+                steal_radius: 900.0,
+                bounce_radius: vec![500.0],
+            }],
+            description: String::new(),
+            aoe_shape: None,
+            cast_range: 0.0,
+        },
+        cooldown_remaining: 0.0,
+        level: 9,
+        casts: 0,
+    });
+    attacker.abilities.push(AbilityState {
+        def: AbilityDef {
+            name: "Fury Swipes".to_string(),
+            cooldown: vec![0.0],
+            mana_cost: vec![0.0],
+            cast_point: 0.0,
+            targeting: TargetType::Passive,
+            effects: vec![Effect::FurySwipes {
+                damage_per_stack: vec![20.0],
+                stack_duration: vec![15.0],
+                armor_reduction_per_stack: vec![0.0],
+            }],
+            description: String::new(),
+            aoe_shape: None,
+            cast_range: 0.0,
+        },
+        cooldown_remaining: 0.0,
+        level: 1,
+        casts: 0,
+    });
+
+    // Primary target in melee range, secondary nearby
+    let target = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
+    let secondary = Unit::from_hero_def(&hero, 2, 1, Vec2::new(200.0, 0.0));
+    let secondary_hp_before = secondary.hp;
+
+    let mut sim = Simulation::with_seed(vec![attacker, target, secondary], 42);
+    // Run until first attack lands
+    for _ in 0..300 {
+        sim.step();
+        if sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Attack { .. })) {
+            break;
+        }
+    }
+
+    // Secondary should have taken bounce damage (melee = instant)
+    assert!(sim.units[2].hp < secondary_hp_before,
+        "Secondary should take bounce damage: before={secondary_hp_before}, after={}", sim.units[2].hp);
+
+    // Attacker should have Fury Swipes stacks on BOTH targets
+    let attacker_state = &sim.units[0].attack_modifier_state;
+    let has_stack_on_secondary = attacker_state.iter().any(|(id, s)| *id == 2 && s.fury_swipes_stacks > 0);
+    assert!(has_stack_on_secondary, "Bounce should apply Fury Swipes stack to secondary target");
+}
+
+#[test]
+fn test_glaives_bounce_50_percent_physical() {
+    // Melee unit with Glaives (no other modifiers) attacks primary
+    // Verify bounce deals 50% of physical damage
+    let hero = HeroDef {
+        name: "TestMelee".to_string(),
+        primary_attribute: Attribute::Intelligence,
+        base_str: 20.0,
+        base_agi: 20.0,
+        base_int: 40.0,
+        str_gain: 2.0,
+        agi_gain: 2.0,
+        int_gain: 3.0,
+        base_attack_time: 1.7,
+        attack_range: 150.0,
+        attack_point: 0.3,
+        move_speed: 300.0,
+        turn_rate: 0.6,
+        collision_radius: 24.0,
+        tier: 1,
+        is_melee: true,
+        // Fixed damage for predictable testing
+        base_damage_min: 20.0,
+        base_damage_max: 20.0,
+        projectile_speed: None,
+    };
+
+    let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    attacker.mana = 500.0;
+    attacker.abilities.push(AbilityState {
+        def: AbilityDef {
+            name: "Glaives".to_string(),
+            cooldown: vec![0.0],
+            mana_cost: vec![0.0],
+            cast_point: 0.0,
+            targeting: TargetType::Passive,
+            effects: vec![Effect::GlaivesOfWisdom {
+                int_damage_factor: vec![1.0],
+                mana_cost: vec![15.0],
+                steal_int_on_kill: vec![0.0],
+                steal_radius: 900.0,
+                bounce_radius: vec![500.0],
+            }],
+            description: String::new(),
+            aoe_shape: None,
+            cast_range: 0.0,
+        },
+        cooldown_remaining: 0.0,
+        level: 9,
+        casts: 0,
+    });
+
+    // Use 0 armor/magic resist targets for clean damage calculation
+    let mut target = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
+    target.armor = 0.0;
+    target.magic_resistance = 0.0;
+    let mut secondary = Unit::from_hero_def(&hero, 2, 1, Vec2::new(200.0, 0.0));
+    secondary.armor = 0.0;
+    secondary.magic_resistance = 0.0;
+
+    let primary_hp_before = target.hp;
+    let secondary_hp_before = secondary.hp;
+
+    let mut sim = Simulation::with_seed(vec![attacker, target, secondary], 42);
+    for _ in 0..300 {
+        sim.step();
+        if sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Attack { .. })) {
+            break;
+        }
+    }
+
+    let primary_dmg = primary_hp_before - sim.units[1].hp;
+    let secondary_dmg = secondary_hp_before - sim.units[2].hp;
+
+    // Primary takes: full physical (60 = 20 base + 40 INT primary) + 40 magical (100% of 40 INT)
+    // Secondary takes: 50% physical (30) + 40 magical (100% of 40 INT)
+    // So secondary_dmg should be roughly primary_dmg - 30 (half the physical portion)
+    // Primary physical = 60, secondary physical = 30, both get 40 magical
+    // Primary total = 100, secondary total = 70
+    // Allow some variance from damage rolls on the bounce
+    assert!(secondary_dmg > 0.0, "Secondary should take damage");
+    assert!(secondary_dmg < primary_dmg,
+        "Bounce should deal less than primary: primary={primary_dmg}, secondary={secondary_dmg}");
+    // The physical portion of bounce should be ~50% of primary's physical
+    // With 0 armor: primary_phys = 60, secondary_phys ≈ 30, both get 40 magic
+    // secondary_dmg ≈ 70, primary_dmg = 100
+    // Allow tolerance for damage roll variance on the bounce
+    let expected_secondary = 70.0; // 30 phys + 40 magic
+    assert!((secondary_dmg - expected_secondary).abs() < 15.0,
+        "Bounce damage should be ~{expected_secondary}, got {secondary_dmg}");
+}

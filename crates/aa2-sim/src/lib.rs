@@ -881,9 +881,8 @@ impl Simulation {
         }
     }
 
-    /// Apply Glaives bounce: deal bonus magical damage to nearest enemy within bounce_radius of target.
-    fn apply_glaives_bounce(&mut self, attacker_idx: usize, target_idx: usize, bonus_magical_damage: f32) {
-        if bonus_magical_damage <= 0.0 { return; }
+    /// Apply Glaives bounce: a full attack at 50% physical damage + all modifiers on nearest enemy.
+    fn apply_glaives_bounce(&mut self, attacker_idx: usize, target_idx: usize, _bonus_magical_damage: f32) {
         // Find bounce_radius from attacker's Glaives ability
         let mut bounce_radius = 0.0_f32;
         for ability in &self.units[attacker_idx].abilities {
@@ -907,9 +906,51 @@ impl Simulation {
                 best = Some((ui, d));
             }
         }
-        if let Some((bounce_idx, _)) = best {
-            let dmg = combat::apply_magic_resistance(bonus_magical_damage, self.units[bounce_idx].magic_resistance);
-            self.units[bounce_idx].hp -= dmg;
+        let Some((bounce_idx, _)) = best else { return; };
+        let bounce_target_id = self.units[bounce_idx].id;
+
+        // Roll base damage and run full attack modifier pipeline
+        let raw_dmg = self.rng.range_f32(self.units[attacker_idx].damage_min, self.units[attacker_idx].damage_max);
+        let ally_aura = find_ally_chaos_strike_aura(&self.units[attacker_idx], &self.units);
+        let atk_result = process_attack_modifiers(
+            &mut self.units[attacker_idx], bounce_target_id, raw_dmg, self.tick, &mut self.rng, ally_aura,
+        );
+
+        // 50% physical damage
+        let physical_dmg = atk_result.damage * 0.5;
+
+        if self.units[attacker_idx].is_melee {
+            // Melee: instant hit
+            let armor = self.units[bounce_idx].armor;
+            let actual_phys = apply_armor(physical_dmg, armor);
+            self.units[bounce_idx].hp -= actual_phys;
+            let magic_dmg = if atk_result.bonus_magical_damage > 0.0 {
+                combat::apply_magic_resistance(atk_result.bonus_magical_damage, self.units[bounce_idx].magic_resistance)
+            } else { 0.0 };
+            self.units[bounce_idx].hp -= magic_dmg;
+            let total_dmg = actual_phys + magic_dmg;
+            // Post-hit effects (lifesteal, ES, FS armor)
+            if attacker_idx < bounce_idx {
+                let (first, second) = self.units.split_at_mut(bounce_idx);
+                post_attack_effects(&mut first[attacker_idx], &mut second[0], total_dmg, atk_result.lifesteal_pct, self.tick);
+            } else {
+                let (first, second) = self.units.split_at_mut(attacker_idx);
+                post_attack_effects(&mut second[0], &mut first[bounce_idx], total_dmg, atk_result.lifesteal_pct, self.tick);
+            }
+        } else {
+            // Ranged: spawn a projectile
+            let proj_speed = self.units[attacker_idx].projectile_speed.unwrap_or(900.0);
+            let proj = Projectile {
+                target_id: bounce_target_id,
+                attacker_id: self.units[attacker_idx].id,
+                damage: physical_dmg,
+                bonus_magical_damage: atk_result.bonus_magical_damage,
+                lifesteal_pct: atk_result.lifesteal_pct,
+                glaives_active: false, // no recursive bounce
+                position: self.units[target_idx].position, // launch from primary target
+                speed: proj_speed,
+            };
+            self.projectiles.push(proj);
         }
     }
 

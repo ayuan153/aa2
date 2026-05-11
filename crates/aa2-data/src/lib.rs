@@ -190,17 +190,25 @@ pub struct UnitConfig {
     pub abilities: Vec<(AbilityDef, u8)>,
     /// Number of ability slots available.
     pub slot_count: u8,
+    /// Hero level (1-30). Scales base attributes via gain per level.
+    pub level: u8,
 }
 
 impl UnitConfig {
     /// Create a new UnitConfig with just a hero and no abilities.
     pub fn new(hero: HeroDef) -> Self {
-        Self { hero, abilities: Vec::new(), slot_count: 4 }
+        Self { hero, abilities: Vec::new(), slot_count: 4, level: 1 }
     }
 
     /// Add an ability at the given level.
     pub fn with_ability(mut self, ability: AbilityDef, level: u8) -> Self {
         self.abilities.push((ability, level));
+        self
+    }
+
+    /// Set the hero level.
+    pub fn with_level(mut self, level: u8) -> Self {
+        self.level = level;
         self
     }
 }
