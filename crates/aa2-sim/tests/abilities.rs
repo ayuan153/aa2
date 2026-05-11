@@ -1314,3 +1314,68 @@ fn test_fury_swipes_gaben_spread() {
     assert!(secondary_stacks >= 1,
         "Expected at least 1 spread stack, got {}", secondary_stacks);
 }
+
+/// Essence Shift: target stats floor at 1 (max_hp can't go below 1) even with many stacks.
+/// Wielder keeps gaining AGI regardless.
+#[test]
+fn test_essence_shift_stats_floor_at_one() {
+    use aa2_sim::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
+
+    let hero = aa2_data::load_hero_def(Path::new("../../data/heroes/juggernaut.ron")).unwrap();
+    let mut target = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
+    let attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+
+    // Manually apply 50 Essence Shift debuff stacks (steals 1 STR each = -50 STR = -1100 HP)
+    // Juggernaut base_max_hp = 560 (20 STR * 22 + 120 base)
+    // -50 STR * 22 = -1100, so expected_max_hp would be 560 - 1100 = -540 without floor
+    for _ in 0..50 {
+        target.buffs.push(Buff {
+            name: "essence_shift_debuff".to_string(),
+            remaining_ticks: 600,
+            tick_effect: None,
+            stacking: StackBehavior::Independent,
+            dispel_type: DispelType::Undispellable,
+            status: StatusFlags::default(),
+            stat_modifier: Some(StatModifier {
+                bonus_strength: -1.0,
+                bonus_armor: -0.167,
+                ..StatModifier::default()
+            }),
+            source_id: 0,
+            is_debuff: true,
+        });
+    }
+
+    let mut sim = Simulation::with_seed(vec![attacker, target], 42);
+    sim.step(); // Process buffs → STR scaling kicks in
+
+    // Target's max_hp should be floored at 1, not negative
+    assert!(sim.units[1].max_hp >= 1.0,
+        "max_hp should floor at 1, got {:.1}", sim.units[1].max_hp);
+    assert!(sim.units[1].hp >= 1.0,
+        "hp should floor at 1, got {:.1}", sim.units[1].hp);
+
+    // Attacker can still gain AGI buffs freely (no cap on positive side)
+    for _ in 0..50 {
+        sim.units[0].buffs.push(Buff {
+            name: "essence_shift_buff".to_string(),
+            remaining_ticks: 600,
+            tick_effect: None,
+            stacking: StackBehavior::Independent,
+            dispel_type: DispelType::Undispellable,
+            status: StatusFlags::default(),
+            stat_modifier: Some(StatModifier {
+                bonus_armor: 3.0 * 0.167, // 3 AGI worth of armor
+                ..StatModifier::default()
+            }),
+            source_id: 0,
+            is_debuff: false,
+        });
+    }
+
+    sim.step();
+    // Attacker should have massive armor bonus (50 * 3 AGI * 0.167 = 25 armor from buffs)
+    let modifier = aa2_sim::buff::total_stat_modifier(&sim.units[0].buffs);
+    assert!(modifier.bonus_armor > 20.0,
+        "Attacker should have large armor bonus from ES stacks, got {:.1}", modifier.bonus_armor);
+}

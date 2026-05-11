@@ -273,9 +273,9 @@ impl Simulation {
             for name in result.expired {
                 events.push(CombatEvent::BuffExpired { tick, target_id: unit.id, name });
             }
-            // STR bonus HP scaling
+            // STR bonus HP scaling (floor at 1 — stats can't go negative)
             let modifier = buff::total_stat_modifier(&unit.buffs);
-            let expected_max_hp = unit.base_max_hp + modifier.bonus_strength * 22.0;
+            let expected_max_hp = (unit.base_max_hp + modifier.bonus_strength * 22.0).max(1.0);
             let hp_diff = expected_max_hp - unit.max_hp;
             if hp_diff.abs() > 0.01 {
                 unit.max_hp = expected_max_hp;
@@ -284,7 +284,7 @@ impl Simulation {
                     unit.hp += hp_diff;
                 } else {
                     // Losing STR: preserve current HP, just cap at new max
-                    unit.hp = unit.hp.min(unit.max_hp);
+                    unit.hp = unit.hp.min(unit.max_hp).max(1.0);
                 }
             }
         }
