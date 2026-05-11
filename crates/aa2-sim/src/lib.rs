@@ -919,39 +919,19 @@ impl Simulation {
         // 50% physical damage
         let physical_dmg = atk_result.damage * 0.5;
 
-        if self.units[attacker_idx].is_melee {
-            // Melee: instant hit
-            let armor = self.units[bounce_idx].armor;
-            let actual_phys = apply_armor(physical_dmg, armor);
-            self.units[bounce_idx].hp -= actual_phys;
-            let magic_dmg = if atk_result.bonus_magical_damage > 0.0 {
-                combat::apply_magic_resistance(atk_result.bonus_magical_damage, self.units[bounce_idx].magic_resistance)
-            } else { 0.0 };
-            self.units[bounce_idx].hp -= magic_dmg;
-            let total_dmg = actual_phys + magic_dmg;
-            // Post-hit effects (lifesteal, ES, FS armor)
-            if attacker_idx < bounce_idx {
-                let (first, second) = self.units.split_at_mut(bounce_idx);
-                post_attack_effects(&mut first[attacker_idx], &mut second[0], total_dmg, atk_result.lifesteal_pct, self.tick);
-            } else {
-                let (first, second) = self.units.split_at_mut(attacker_idx);
-                post_attack_effects(&mut second[0], &mut first[bounce_idx], total_dmg, atk_result.lifesteal_pct, self.tick);
-            }
-        } else {
-            // Ranged: spawn a projectile
-            let proj_speed = self.units[attacker_idx].projectile_speed.unwrap_or(900.0);
-            let proj = Projectile {
-                target_id: bounce_target_id,
-                attacker_id: self.units[attacker_idx].id,
-                damage: physical_dmg,
-                bonus_magical_damage: atk_result.bonus_magical_damage,
-                lifesteal_pct: atk_result.lifesteal_pct,
-                glaives_active: false, // no recursive bounce
-                position: self.units[target_idx].position, // launch from primary target
-                speed: proj_speed,
-            };
-            self.projectiles.push(proj);
-        }
+        // Bounce always spawns a projectile (melee uses default 900 speed)
+        let proj_speed = self.units[attacker_idx].projectile_speed.unwrap_or(900.0);
+        let proj = Projectile {
+            target_id: bounce_target_id,
+            attacker_id: self.units[attacker_idx].id,
+            damage: physical_dmg,
+            bonus_magical_damage: atk_result.bonus_magical_damage,
+            lifesteal_pct: atk_result.lifesteal_pct,
+            glaives_active: false, // no recursive bounce
+            position: self.units[target_idx].position, // launch from primary target
+            speed: proj_speed,
+        };
+        self.projectiles.push(proj);
     }
 
     fn check_round_end(&mut self) {

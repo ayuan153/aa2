@@ -1641,15 +1641,16 @@ fn test_glaives_bounce_applies_modifiers() {
     let secondary_hp_before = secondary.hp;
 
     let mut sim = Simulation::with_seed(vec![attacker, target, secondary], 42);
-    // Run until first attack lands
+    // Run until first attack lands + bounce projectile arrives
     for _ in 0..300 {
         sim.step();
-        if sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Attack { .. })) {
+        // Wait for bounce projectile to hit (attack + travel time)
+        if sim.units[2].hp < secondary_hp_before {
             break;
         }
     }
 
-    // Secondary should have taken bounce damage (melee = instant)
+    // Secondary should have taken bounce damage (via projectile)
     assert!(sim.units[2].hp < secondary_hp_before,
         "Secondary should take bounce damage: before={secondary_hp_before}, after={}", sim.units[2].hp);
 
@@ -1725,7 +1726,8 @@ fn test_glaives_bounce_50_percent_physical() {
     let mut sim = Simulation::with_seed(vec![attacker, target, secondary], 42);
     for _ in 0..300 {
         sim.step();
-        if sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Attack { .. })) {
+        // Wait for bounce projectile to arrive at secondary
+        if sim.units[2].hp < secondary_hp_before {
             break;
         }
     }
