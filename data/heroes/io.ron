@@ -1,0 +1,24 @@
+// Io - Wisp (Dota2 patch 7.41c)
+// STR ranged support with INSTANT turn rate (unique in Dota2)
+// Io has no turn animation - can act in any direction immediately
+HeroDef(
+    name: "Io",
+    primary_attribute: Strength,
+    base_str: 17.0,
+    base_agi: 14.0,
+    base_int: 23.0,
+    str_gain: 3.0,
+    agi_gain: 1.6,
+    int_gain: 1.7,
+    base_attack_time: 1.7,
+    attack_range: 500.0,      // Ranged
+    attack_point: 0.15,       // Very fast frontswing
+    move_speed: 320.0,
+    turn_rate: 999.0,         // Instant turn (effectively infinite rad/tick)
+    collision_radius: 27.0,
+    tier: 2,
+    is_melee: false,
+    base_damage_min: 26.0,    // 43-52 total minus 17 STR
+    base_damage_max: 35.0,
+    projectile_speed: Some(1200.0),
+)

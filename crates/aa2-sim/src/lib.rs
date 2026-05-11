@@ -359,6 +359,35 @@ impl Simulation {
 
             // Try to cast an ability before falling through to auto-attack
             if let Some((ability_index, target_id, target_pos)) = ai::try_find_cast(&self.units[i], &self.units) {
+                let cast_range = self.units[i].abilities[ability_index].def.cast_range;
+                let targeting = &self.units[i].abilities[ability_index].def.targeting;
+                let needs_facing = !matches!(targeting, aa2_data::TargetType::NoTarget);
+
+                // Check if we need to walk into cast range (for targeted abilities)
+                if needs_facing {
+                    if let Some(tpos) = target_pos {
+                        let dist = self.units[i].position.distance(tpos);
+                        if dist > cast_range && cast_range > 0.0 {
+                            // Walk toward target until in cast range
+                            self.move_toward(i, tpos);
+                            self.units[i].state = UnitState::Moving;
+                            continue;
+                        }
+
+                        // Check facing — must turn toward target before casting
+                        let angle_to = angle_diff(
+                            self.units[i].facing,
+                            (tpos - self.units[i].position).angle(),
+                        );
+                        if angle_to.abs() >= ACTION_THRESHOLD {
+                            self.turn_toward(i, tpos);
+                            self.units[i].state = UnitState::Turning;
+                            continue;
+                        }
+                    }
+                }
+
+                // In range and facing (or NoTarget) — begin cast
                 let cast_time = self.units[i].abilities[ability_index].def.cast_point;
                 let ability_name = self.units[i].abilities[ability_index].def.name.clone();
                 self.units[i].cast_state = Some(cast::CastInProgress {

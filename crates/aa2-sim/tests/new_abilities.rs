@@ -669,3 +669,91 @@ fn test_hg_targets_furthest_on_subsequent_cast() {
     let (_, target_id, _) = result.unwrap();
     assert_eq!(target_id, Some(2), "Should target furthest ally on subsequent cast");
 }
+
+/// Test that Io (instant turn rate) casts faster than a slow-turning hero
+/// when the target is behind them (requiring a 180° turn).
+#[test]
+fn test_io_instant_turn_rate_vs_slow_hero() {
+    use aa2_sim::vec2::Vec2;
+    use aa2_sim::unit::Unit;
+    use aa2_sim::cast::AbilityState;
+    use aa2_sim::{Simulation, CombatEvent};
+    use aa2_data::{AbilityDef, DamageType, Effect, TargetType, Attribute, HeroDef};
+
+    // Create a simple targeted ability
+    let ability = AbilityDef {
+        name: "Test Bolt".to_string(),
+        cooldown: 30.0,
+        mana_cost: vec![50.0],
+        cast_point: 0.3,
+        targeting: TargetType::SingleEnemy,
+        effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 600.0,
+    };
+
+    // Io: instant turn rate (999.0)
+    let io_def = aa2_data::load_hero_def(std::path::Path::new("../../data/heroes/io.ron")).unwrap();
+    // Slow hero: turn rate 0.5 (needs ~6 ticks to turn 180°)
+    let mut slow_def = io_def.clone();
+    slow_def.name = "SlowTurner".to_string();
+    slow_def.turn_rate = 0.5;
+
+    // Place heroes facing UP (positive Y), with enemy BEHIND them (negative Y)
+    // This forces a ~180° turn before casting
+    let mut io_unit = Unit::from_hero_def(&io_def, 0, 0, Vec2::new(0.0, 300.0));
+    io_unit.facing = std::f32::consts::FRAC_PI_2; // facing up (+Y)
+    io_unit.abilities.push(AbilityState { def: ability.clone(), cooldown_remaining: 0.0, level: 1, casts: 0 });
+
+    let mut slow_unit = Unit::from_hero_def(&slow_def, 2, 0, Vec2::new(200.0, 300.0));
+    slow_unit.facing = std::f32::consts::FRAC_PI_2; // facing up (+Y)
+    slow_unit.abilities.push(AbilityState { def: ability.clone(), cooldown_remaining: 0.0, level: 1, casts: 0 });
+
+    // Enemy behind both heroes (at Y=0, within cast range 600)
+    let enemy_def = io_def.clone();
+    let enemy = Unit::from_hero_def(&enemy_def, 1, 1, Vec2::new(100.0, 0.0));
+
+    // Run Io simulation
+    let mut sim_io = Simulation::new(vec![io_unit, enemy.clone()]);
+    let mut io_cast_tick = None;
+    for _ in 0..100 {
+        sim_io.step();
+        if io_cast_tick.is_none() {
+            if let Some(evt) = sim_io.combat_log.iter().find(|e| matches!(e, CombatEvent::CastStart { .. })) {
+                if let CombatEvent::CastStart { tick, .. } = evt {
+                    io_cast_tick = Some(*tick);
+                }
+            }
+        }
+        if io_cast_tick.is_some() { break; }
+    }
+
+    // Run slow hero simulation
+    let enemy2 = Unit::from_hero_def(&enemy_def, 1, 1, Vec2::new(100.0, 0.0));
+    let mut sim_slow = Simulation::new(vec![slow_unit, enemy2]);
+    let mut slow_cast_tick = None;
+    for _ in 0..100 {
+        sim_slow.step();
+        if slow_cast_tick.is_none() {
+            if let Some(evt) = sim_slow.combat_log.iter().find(|e| matches!(e, CombatEvent::CastStart { .. })) {
+                if let CombatEvent::CastStart { tick, .. } = evt {
+                    slow_cast_tick = Some(*tick);
+                }
+            }
+        }
+        if slow_cast_tick.is_some() { break; }
+    }
+
+    let io_tick = io_cast_tick.expect("Io should have started casting");
+    let slow_tick = slow_cast_tick.expect("SlowTurner should have started casting");
+
+    println!("Io cast start: tick {io_tick}");
+    println!("SlowTurner cast start: tick {slow_tick}");
+    println!("Difference: {} ticks ({:.2}s)", slow_tick - io_tick, (slow_tick - io_tick) as f32 / 30.0);
+
+    // Io should cast on tick 1 (instant turn, immediately faces target)
+    // SlowTurner needs ~6 ticks to turn 180° at 0.5 rad/tick (PI / 0.5 = 6.28 ticks)
+    assert!(io_tick < slow_tick, "Io (instant turn) should cast before slow hero");
+    assert!(slow_tick - io_tick >= 5, "Slow hero should need at least 5 ticks to turn 180°");
+}
