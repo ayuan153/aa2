@@ -211,7 +211,7 @@ pub fn post_attack_effects(
                         remaining_ticks: dur_ticks,
                         tick_effect: None,
                         stacking: StackBehavior::Independent,
-                        dispel_type: DispelType::BasicDispel,
+                        dispel_type: DispelType::Undispellable,
                         status: StatusFlags::default(),
                         stat_modifier: Some(StatModifier {
                             bonus_armor: -armor_red,
