@@ -45,17 +45,26 @@ aa2/
 
 ### Build
 
+### Build & Test
+
 ```bash
 cargo build
-cargo test
+cargo test              # Run all tests (unit + integration)
+cargo test --test integration_mechanics  # Run only mechanic interaction tests
+cargo clippy            # Lint (must pass with no warnings)
 ```
+
+### Test Philosophy
+
+Every mechanic verification is encoded as an automated test. If you can observe it in the combat log, it should be an assertion in a test file. Tests use actual RON data files and deterministic seeds — same input always produces same output.
 
 ### Run Dev Mode
 
 ```bash
-cargo run --bin aa2-dev
-# Or with specific heroes:
-cargo run --bin aa2-dev -- data/heroes/sven.ron data/heroes/drow.ron
+cargo run --bin aa2-dev                                    # 1v1 default (Warrior vs Ranger)
+cargo run --bin aa2-dev -- data/heroes/sven.ron data/heroes/drow.ron  # Custom 1v1
+cargo run --bin aa2-dev -- --5v5                            # 5v5 brawl with all heroes
+cargo run --bin aa2-dev -- --loadout data/loadouts/sven_nuker.ron data/loadouts/cm_ravage.ron  # With abilities
 ```
 
 ## Heroes Available

@@ -33,6 +33,54 @@ When implementing a new mechanic:
 2. Implement until test passes
 3. Run full test suite to ensure no regressions
 
+## Integration Tests (MANDATORY)
+
+**Every manual verification MUST become an automated test.** If you ran the dev binary and checked the output to verify something works, that verification must be encoded as a test before the work is considered done.
+
+### When to write an integration test
+
+- You verified a mechanic by reading combat log output → write a test
+- You confirmed an interaction between two abilities → write a test
+- You checked that a value scales correctly at different levels → write a test
+- You validated timing (ticks, delays, travel time) → write a test
+
+### Pattern
+
+```rust
+/// [What this tests] — [Why it matters for game feel]
+#[test]
+fn test_specific_interaction() {
+    // 1. Load actual RON data files (proves data + code work together)
+    let ability = load_ability_def(Path::new("../../data/abilities/X.ron")).unwrap();
+
+    // 2. Set up exact initial conditions (deterministic)
+    let mut unit = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    unit.abilities.push(AbilityState { def: ability, level: 3, .. });
+
+    // 3. Run simulation with fixed seed
+    let mut sim = Simulation::with_seed(vec![unit, enemy], 42);
+    for _ in 0..N { sim.step(); }
+
+    // 4. Assert specific properties (not approximate unless necessary)
+    assert!(sim.combat_log.iter().any(|e| matches!(e, CombatEvent::X { .. })));
+}
+```
+
+### Where to put tests
+
+| Test type | Location | Tests what |
+|-----------|----------|-----------|
+| Unit tests | `src/*.rs` (`#[cfg(test)]` modules) | Individual formulas, single-function behavior |
+| Integration tests | `tests/*.rs` | Multi-system interactions, full sim runs, data file loading |
+
+### Rules
+
+- Tests MUST be deterministic (fixed seed, exact positions, no timing dependencies)
+- Tests MUST be fast (< 100ms each, ideally < 1ms)
+- Tests MUST use actual RON data files where the mechanic depends on data values
+- Tests MUST have a doc comment explaining what interaction they verify
+- Never verify by "eyeballing" output — if it's worth checking, it's worth asserting
+
 ## Documentation Updates
 
 When making changes that affect architecture or project plan:
