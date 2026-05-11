@@ -9,7 +9,7 @@
 AbilityDef(
     name: "Ravage",
     cooldown: 140.0,  // base cooldown
-    mana_cost: 125.0,
+    mana_cost: [125.0, 225.0, 325.0, 325.0, 325.0, 325.0, 325.0, 325.0, 325.0],
     cast_point: 0.3,
     targeting: NoTarget,
     effects: [

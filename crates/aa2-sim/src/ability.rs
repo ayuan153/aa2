@@ -95,6 +95,7 @@ pub fn execute_ability(
                         status: StatusFlags::default(),
                         stat_modifier: None,
                         source_id: caster_id,
+                        is_debuff: units[idx].team != caster_team,
                     };
                     apply_buff(&mut units[idx].buffs, buff);
                     events.push(CombatEvent::BuffApplied {
@@ -158,6 +159,7 @@ pub fn execute_ability(
                     status: StatusFlags::default(),
                     stat_modifier: Some(modifier.clone()),
                     source_id: caster_id,
+                    is_debuff: false,
                 };
                 // Apply to target
                 if let Some(tid) = target_id
@@ -241,7 +243,7 @@ mod tests {
         AbilityDef {
             name: "TestAbility".to_string(),
             cooldown: 10.0,
-            mana_cost: 100.0,
+            mana_cost: vec![100.0],
             cast_point: 0.3,
             targeting: TargetType::SingleEnemy,
             effects,

@@ -1,6 +1,6 @@
 //! Cast system: ability timing, cooldowns, mana deduction, and interrupts.
 
-use aa2_data::AbilityDef;
+use aa2_data::{AbilityDef, value_at_level};
 use crate::vec2::Vec2;
 use crate::TICK_DURATION;
 
@@ -66,7 +66,7 @@ pub fn tick_cast(cast_state: &mut Option<CastInProgress>, abilities: &[AbilitySt
     cast.cast_time_remaining -= TICK_DURATION;
     if cast.cast_time_remaining <= 1e-6 {
         let idx = cast.ability_index;
-        let mana_cost = abilities[idx].def.mana_cost;
+        let mana_cost = value_at_level(&abilities[idx].def.mana_cost, abilities[idx].level);
         *cast_state = None;
         CastTickResult::Completed { ability_index: idx, mana_cost }
     } else {
@@ -83,7 +83,7 @@ mod tests {
         AbilityDef {
             name: "TestAbility".to_string(),
             cooldown,
-            mana_cost,
+            mana_cost: vec![mana_cost],
             cast_point,
             targeting: TargetType::NoTarget,
             effects: vec![],

@@ -34,7 +34,7 @@ fn dark_pact_ability() -> AbilityDef {
     AbilityDef {
         name: "Dark Pact".to_string(),
         cooldown: 10.0,
-        mana_cost: 50.0,
+        mana_cost: vec![50.0],
         cast_point: 0.0, // instant cast for testing
         targeting: TargetType::NoTarget,
         effects: vec![Effect::DarkPact {
@@ -58,7 +58,7 @@ fn heavenly_grace_ability() -> AbilityDef {
     AbilityDef {
         name: "Heavenly Grace".to_string(),
         cooldown: 10.0,
-        mana_cost: 50.0,
+        mana_cost: vec![50.0],
         cast_point: 0.0,
         targeting: TargetType::SingleAlly,
         effects: vec![Effect::BuffTargetAndSelf {
@@ -79,7 +79,7 @@ fn ravage_ability() -> AbilityDef {
     AbilityDef {
         name: "Ravage".to_string(),
         cooldown: 150.0,
-        mana_cost: 150.0,
+        mana_cost: vec![150.0],
         cast_point: 0.0,
         targeting: TargetType::NoTarget,
         effects: vec![Effect::ExpandingWaveStun {
@@ -252,6 +252,7 @@ fn test_dark_pact_dispel() {
         status: StatusFlags { stunned: true, ..StatusFlags::default() },
         stat_modifier: None,
         source_id: 1,
+        is_debuff: true,
     });
 
     assert!(sim.units[0].buffs.iter().any(|b| b.name == "test_stun"));

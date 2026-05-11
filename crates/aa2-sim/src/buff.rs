@@ -107,6 +107,8 @@ pub struct Buff {
     pub stat_modifier: Option<StatModifier>,
     /// ID of the unit that applied this buff.
     pub source_id: u32,
+    /// true = negative effect (from enemy), false = positive (from ally).
+    pub is_debuff: bool,
 }
 
 /// Result of processing one tick of all buffs on a unit.
@@ -198,9 +200,30 @@ pub fn active_status(buffs: &[Buff]) -> StatusFlags {
     StatusFlags::merge(&flags)
 }
 
-/// Remove all buffs that can be dispelled at the given strength.
+/// Remove debuffs that can be dispelled at the given strength (self-dispel).
 pub fn dispel(buffs: &mut Vec<Buff>, strength: DispelType) {
-    buffs.retain(|b| b.dispel_type > strength);
+    buffs.retain(|b| {
+        if !b.is_debuff { return true; }
+        match (&b.dispel_type, &strength) {
+            (DispelType::Undispellable, _) => true,
+            (DispelType::StrongDispel, DispelType::StrongDispel) => false,
+            (DispelType::StrongDispel, _) => true,
+            (DispelType::BasicDispel, _) => false,
+        }
+    });
+}
+
+/// Remove positive buffs from an enemy (purge). Keeps debuffs intact.
+pub fn purge_enemy_buffs(buffs: &mut Vec<Buff>, strength: DispelType) {
+    buffs.retain(|b| {
+        if b.is_debuff { return true; }
+        match (&b.dispel_type, &strength) {
+            (DispelType::Undispellable, _) => true,
+            (DispelType::StrongDispel, DispelType::StrongDispel) => false,
+            (DispelType::StrongDispel, _) => true,
+            (DispelType::BasicDispel, _) => false,
+        }
+    });
 }
 
 /// Sum all active stat modifiers.
@@ -235,6 +258,7 @@ mod tests {
             status: StatusFlags::default(),
             stat_modifier: None,
             source_id: source,
+            is_debuff: true,
         }
     }
 
@@ -325,6 +349,64 @@ mod tests {
         dispel(&mut buffs, DispelType::BasicDispel);
         assert_eq!(buffs.len(), 1);
         assert_eq!(buffs[0].name, "strong_debuff");
+    }
+
+    #[test]
+    fn test_dispel_only_removes_debuffs() {
+        let mut buffs = Vec::new();
+        // Allied buff (is_debuff: false)
+        let mut allied = make_basic_buff("heavenly_grace", 90, 2);
+        allied.is_debuff = false;
+        buffs.push(allied);
+        // Enemy debuff (is_debuff: true)
+        buffs.push(make_basic_buff("slow", 60, 3));
+
+        dispel(&mut buffs, DispelType::BasicDispel);
+        assert_eq!(buffs.len(), 1);
+        assert_eq!(buffs[0].name, "heavenly_grace");
+    }
+
+    #[test]
+    fn test_allied_buff_survives_self_dispel() {
+        let mut buffs = Vec::new();
+        let mut hg = make_basic_buff("heavenly_grace", 90, 2);
+        hg.is_debuff = false;
+        buffs.push(hg);
+        let mut debuff = make_basic_buff("curse", 60, 3);
+        debuff.dispel_type = DispelType::StrongDispel;
+        buffs.push(debuff);
+
+        // Strong self-dispel (Dark Pact)
+        dispel(&mut buffs, DispelType::StrongDispel);
+        assert_eq!(buffs.len(), 1);
+        assert_eq!(buffs[0].name, "heavenly_grace");
+    }
+
+    #[test]
+    fn test_undispellable_debuff() {
+        let mut buffs = Vec::new();
+        let mut undispellable = make_basic_buff("doom", 300, 3);
+        undispellable.dispel_type = DispelType::Undispellable;
+        buffs.push(undispellable);
+
+        dispel(&mut buffs, DispelType::StrongDispel);
+        assert_eq!(buffs.len(), 1);
+        assert_eq!(buffs[0].name, "doom");
+    }
+
+    #[test]
+    fn test_purge_enemy_buffs() {
+        let mut buffs = Vec::new();
+        // Positive buff on enemy
+        let mut enemy_buff = make_basic_buff("haste", 60, 2);
+        enemy_buff.is_debuff = false;
+        buffs.push(enemy_buff);
+        // Debuff on enemy (should stay)
+        buffs.push(make_basic_buff("poison", 60, 3));
+
+        purge_enemy_buffs(&mut buffs, DispelType::BasicDispel);
+        assert_eq!(buffs.len(), 1);
+        assert_eq!(buffs[0].name, "poison");
     }
 
     #[test]

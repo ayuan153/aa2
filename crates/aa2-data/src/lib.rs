@@ -96,7 +96,7 @@ pub struct HeroDef {
 pub struct AbilityDef {
     pub name: String,
     pub cooldown: f32,
-    pub mana_cost: f32,
+    pub mana_cost: Vec<f32>,
     pub cast_point: f32,
     pub targeting: TargetType,
     pub effects: Vec<Effect>,
@@ -112,6 +112,13 @@ pub struct AbilityDef {
 /// Default cast range for abilities (600 units).
 fn default_cast_range() -> f32 {
     600.0
+}
+
+/// Look up a per-level value from a Vec (1-indexed: level 1 = index 0).
+/// Clamps to the last element if level exceeds the array length.
+pub fn value_at_level(values: &[f32], level: u8) -> f32 {
+    let idx = (level.saturating_sub(1) as usize).min(values.len().saturating_sub(1));
+    values[idx]
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

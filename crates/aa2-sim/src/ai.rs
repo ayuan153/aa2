@@ -1,6 +1,6 @@
 //! Unit AI: ability casting decision logic.
 
-use aa2_data::TargetType;
+use aa2_data::{TargetType, value_at_level};
 use crate::buff::active_status;
 use crate::unit::Unit;
 use crate::vec2::Vec2;
@@ -25,7 +25,7 @@ pub fn try_find_cast(
         if ability.cooldown_remaining > 0.0 {
             continue;
         }
-        if unit.mana < ability.def.mana_cost {
+        if unit.mana < value_at_level(&ability.def.mana_cost, ability.level) {
             continue;
         }
 

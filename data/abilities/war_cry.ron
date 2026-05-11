@@ -2,7 +2,7 @@
 AbilityDef(
     name: "War Cry",
     cooldown: 30.0,
-    mana_cost: 100.0,
+    mana_cost: [100.0],
     cast_point: 0.2,       // Quick cast animation
     targeting: NoTarget,
     effects: [

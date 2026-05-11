@@ -249,7 +249,9 @@ impl Simulation {
     fn step_regen(&mut self) {
         for unit in self.units.iter_mut() {
             if !unit.is_alive() { continue; }
-            unit.hp = (unit.hp + unit.hp_regen * TICK_DURATION).min(unit.max_hp);
+            let modifier = buff::total_stat_modifier(&unit.buffs);
+            let total_regen = unit.hp_regen + modifier.bonus_hp_regen;
+            unit.hp = (unit.hp + total_regen * TICK_DURATION).min(unit.max_hp);
             unit.mana = (unit.mana + unit.mana_regen * TICK_DURATION).min(unit.max_mana);
         }
     }
@@ -268,6 +270,14 @@ impl Simulation {
             }
             for name in result.expired {
                 events.push(CombatEvent::BuffExpired { tick, target_id: unit.id, name });
+            }
+            // STR bonus HP scaling
+            let modifier = buff::total_stat_modifier(&unit.buffs);
+            let expected_max_hp = unit.base_max_hp + modifier.bonus_strength * 22.0;
+            let hp_diff = expected_max_hp - unit.max_hp;
+            if hp_diff.abs() > 0.01 {
+                unit.max_hp = expected_max_hp;
+                unit.hp = (unit.hp + hp_diff).max(1.0);
             }
         }
         self.combat_log.extend(events);
@@ -672,6 +682,7 @@ impl Simulation {
                                 status: StatusFlags { stunned: true, ..StatusFlags::default() },
                                 stat_modifier: None,
                                 source_id: caster_id,
+                                is_debuff: true,
                             };
                             apply_buff(&mut u.buffs, stun_buff);
                             already_hit.push(u.id);
@@ -969,6 +980,7 @@ mod tests {
             status: StatusFlags { stunned: true, ..StatusFlags::default() },
             stat_modifier: None,
             source_id: 1,
+            is_debuff: true,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1004,7 +1016,7 @@ mod tests {
             def: AbilityDef {
                 name: "Fireball".to_string(),
                 cooldown: 10.0,
-                mana_cost: 50.0,
+                mana_cost: vec![50.0],
                 cast_point: 0.3,
                 targeting: TargetType::SingleEnemy,
                 effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
@@ -1037,7 +1049,7 @@ mod tests {
             def: AbilityDef {
                 name: "Smash".to_string(),
                 cooldown: 10.0,
-                mana_cost: 50.0,
+                mana_cost: vec![50.0],
                 cast_point: 0.3,
                 targeting: TargetType::SingleEnemy,
                 effects: vec![Effect::Damage { kind: DamageType::Physical, base: vec![200.0] }],
@@ -1073,7 +1085,7 @@ mod tests {
             def: AbilityDef {
                 name: "Fireball".to_string(),
                 cooldown: 10.0,
-                mana_cost: 50.0,
+                mana_cost: vec![50.0],
                 cast_point: 0.3,
                 targeting: TargetType::SingleEnemy,
                 effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
@@ -1110,7 +1122,7 @@ mod tests {
             def: AbilityDef {
                 name: "Fireball".to_string(),
                 cooldown: 10.0,
-                mana_cost: 50.0,
+                mana_cost: vec![50.0],
                 cast_point: 0.3,
                 targeting: TargetType::SingleEnemy,
                 effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
@@ -1131,6 +1143,7 @@ mod tests {
             status: StatusFlags { silenced: true, ..StatusFlags::default() },
             stat_modifier: None,
             source_id: 1,
+            is_debuff: true,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1151,7 +1164,7 @@ mod tests {
         let ability1 = AbilityDef {
             name: "Fireball".to_string(),
             cooldown: 10.0,
-            mana_cost: 100.0,
+            mana_cost: vec![100.0],
             cast_point: 0.3,
             targeting: TargetType::SingleEnemy,
             effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0, 150.0, 200.0] }],
@@ -1162,7 +1175,7 @@ mod tests {
         let ability2 = AbilityDef {
             name: "War Cry".to_string(),
             cooldown: 30.0,
-            mana_cost: 50.0,
+            mana_cost: vec![50.0],
             cast_point: 0.2,
             targeting: TargetType::NoTarget,
             effects: vec![Effect::ApplyBuff { name: "War Cry".to_string(), duration: 6.0 }],
@@ -1202,5 +1215,171 @@ mod tests {
         assert_eq!(config.abilities[0].1, 3);
         assert_eq!(config.abilities[1].0.name, "War Cry");
         assert_eq!(config.abilities[1].1, 1);
+    }
+
+    #[test]
+    fn test_str_buff_increases_hp() {
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0)); // far away, no combat
+
+        let initial_hp = u0.hp;
+        let initial_max_hp = u0.max_hp;
+
+        // Apply STR buff: +20 STR = +440 HP
+        u0.buffs.push(Buff {
+            name: "str_buff".to_string(),
+            remaining_ticks: 90,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::BasicDispel,
+            status: StatusFlags::default(),
+            stat_modifier: Some(StatModifier { bonus_strength: 20.0, ..StatModifier::default() }),
+            source_id: 0,
+            is_debuff: false,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+        sim.step();
+
+        assert!((sim.units[0].max_hp - (initial_max_hp + 440.0)).abs() < 1.0);
+        assert!((sim.units[0].hp - (initial_hp + 440.0)).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_str_buff_expiry_decreases_hp() {
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0));
+
+        let initial_max_hp = u0.max_hp;
+
+        // Apply STR buff that expires in 1 tick
+        u0.buffs.push(Buff {
+            name: "str_buff".to_string(),
+            remaining_ticks: 2,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::BasicDispel,
+            status: StatusFlags::default(),
+            stat_modifier: Some(StatModifier { bonus_strength: 20.0, ..StatModifier::default() }),
+            source_id: 0,
+            is_debuff: false,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+        sim.step(); // buff active: HP goes up
+        assert!((sim.units[0].max_hp - (initial_max_hp + 440.0)).abs() < 1.0);
+
+        sim.step(); // buff expires: HP goes back down
+        assert!((sim.units[0].max_hp - initial_max_hp).abs() < 1.0);
+        assert!((sim.units[0].hp - initial_max_hp).abs() < 2.0); // back to base (with tiny regen)
+    }
+
+    #[test]
+    fn test_str_buff_non_lethal() {
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0));
+
+        // Set HP very low
+        u0.hp = 50.0;
+
+        // Apply STR buff that expires in 2 ticks
+        u0.buffs.push(Buff {
+            name: "str_buff".to_string(),
+            remaining_ticks: 2,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::BasicDispel,
+            status: StatusFlags::default(),
+            stat_modifier: Some(StatModifier { bonus_strength: 20.0, ..StatModifier::default() }),
+            source_id: 0,
+            is_debuff: false,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+        sim.step(); // buff active: HP goes up by 440 -> 490
+        assert!((sim.units[0].hp - 490.0).abs() < 1.0);
+
+        sim.step(); // buff expires: HP drops by 440 -> 50, but floor at 1
+        // 490 + tiny regen - 440 = ~50, which is > 1, so no floor needed here
+        // Let's test the actual floor case: set HP to 100 after buff applied
+        // Actually the above case won't floor. Let me make a proper floor test.
+    }
+
+    #[test]
+    fn test_str_buff_non_lethal_floors_at_1() {
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0));
+
+        // Apply STR buff that expires in 2 ticks
+        u0.buffs.push(Buff {
+            name: "str_buff".to_string(),
+            remaining_ticks: 2,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::BasicDispel,
+            status: StatusFlags::default(),
+            stat_modifier: Some(StatModifier { bonus_strength: 20.0, ..StatModifier::default() }),
+            source_id: 0,
+            is_debuff: false,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+        sim.step(); // buff active
+
+        // Damage the unit so HP is very low (below the 440 that will be removed)
+        sim.units[0].hp = 10.0;
+
+        sim.step(); // buff expires: would go to 10 - 440 = -430, floors at 1
+        assert_eq!(sim.units[0].hp, 1.0);
+    }
+
+    #[test]
+    fn test_bonus_hp_regen() {
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
+
+        let def = make_warrior();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0));
+
+        // Damage the unit
+        u0.hp = u0.max_hp - 100.0;
+        let hp_before = u0.hp;
+        let base_regen = u0.hp_regen; // per second
+
+        // Apply buff with bonus_hp_regen of 30/sec
+        u0.buffs.push(Buff {
+            name: "regen_buff".to_string(),
+            remaining_ticks: 90,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::BasicDispel,
+            status: StatusFlags::default(),
+            stat_modifier: Some(StatModifier { bonus_hp_regen: 30.0, ..StatModifier::default() }),
+            source_id: 0,
+            is_debuff: false,
+        });
+
+        let mut sim = Simulation::new(vec![u0, u1]);
+        // Run 30 ticks = 1 second
+        for _ in 0..30 {
+            sim.step();
+        }
+
+        let expected_regen = (base_regen + 30.0) * 1.0; // 1 second
+        let actual_regen = sim.units[0].hp - hp_before;
+        assert!((actual_regen - expected_regen).abs() < 1.0,
+            "Expected ~{expected_regen} regen, got {actual_regen}");
     }
 }

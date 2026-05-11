@@ -48,6 +48,8 @@ pub struct Unit {
     pub hp: f32,
     /// Maximum hit points.
     pub max_hp: f32,
+    /// Base max HP without buff modifiers.
+    pub base_max_hp: f32,
     /// Current mana.
     pub mana: f32,
     /// Maximum mana.
@@ -155,6 +157,7 @@ impl Unit {
             team,
             hp: stats.max_hp,
             max_hp: stats.max_hp,
+            base_max_hp: stats.max_hp,
             mana: stats.max_mana,
             max_mana: stats.max_mana,
             hp_regen: stats.hp_regen,
