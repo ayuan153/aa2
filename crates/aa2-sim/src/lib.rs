@@ -277,7 +277,13 @@ impl Simulation {
             let hp_diff = expected_max_hp - unit.max_hp;
             if hp_diff.abs() > 0.01 {
                 unit.max_hp = expected_max_hp;
-                unit.hp = (unit.hp + hp_diff).max(1.0);
+                if hp_diff > 0.0 {
+                    // Gaining STR: increase current HP (effective heal)
+                    unit.hp += hp_diff;
+                } else {
+                    // Losing STR: preserve current HP, just cap at new max
+                    unit.hp = unit.hp.min(unit.max_hp);
+                }
             }
         }
         self.combat_log.extend(events);
@@ -1343,11 +1349,12 @@ mod tests {
         let mut sim = Simulation::new(vec![u0, u1]);
         sim.step(); // buff active
 
-        // Damage the unit so HP is very low (below the 440 that will be removed)
+        // Damage the unit so HP is very low
         sim.units[0].hp = 10.0;
 
-        sim.step(); // buff expires: would go to 10 - 440 = -430, floors at 1
-        assert_eq!(sim.units[0].hp, 1.0);
+        sim.step(); // buff expires: HP preserved (capped at new max, which is base_max_hp)
+        // HP stays near 10 (plus tiny regen) since 10 < base_max_hp
+        assert!(sim.units[0].hp >= 10.0 && sim.units[0].hp < 11.0);
     }
 
     #[test]
