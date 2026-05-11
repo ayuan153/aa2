@@ -184,7 +184,8 @@ pub fn post_attack_effects(
                     status: StatusFlags::default(),
                     stat_modifier: Some(StatModifier {
                         bonus_strength: -s_steal,
-                        bonus_armor: -a_steal * 0.167,
+                        bonus_agi: -a_steal,
+                        bonus_int: -_i_steal,
                         ..StatModifier::default()
                     }),
                     source_id: attacker.id,
@@ -201,8 +202,7 @@ pub fn post_attack_effects(
                     dispel_type: DispelType::Undispellable,
                     status: StatusFlags::default(),
                     stat_modifier: Some(StatModifier {
-                        bonus_armor: a_gain * 0.167,
-                        bonus_attack_speed: a_gain,
+                        bonus_agi: a_gain,
                         ..StatModifier::default()
                     }),
                     source_id: attacker.id,
@@ -620,12 +620,14 @@ mod tests {
         assert_eq!(target.buffs[0].name, "essence_shift_debuff");
         let target_mod = target.buffs[0].stat_modifier.as_ref().unwrap();
         assert!((target_mod.bonus_strength - (-1.0)).abs() < 0.01);
+        assert!((target_mod.bonus_agi - (-1.0)).abs() < 0.01);
+        assert!((target_mod.bonus_int - (-1.0)).abs() < 0.01);
 
-        // Attacker should have a buff adding AGI-equivalent stats
+        // Attacker should have a buff adding AGI
         assert_eq!(attacker.buffs.len(), 1);
         assert_eq!(attacker.buffs[0].name, "essence_shift_buff");
         let attacker_mod = attacker.buffs[0].stat_modifier.as_ref().unwrap();
-        assert!((attacker_mod.bonus_attack_speed - 3.0).abs() < 0.01);
+        assert!((attacker_mod.bonus_agi - 3.0).abs() < 0.01);
     }
 
     fn make_test_unit(id: u32, team: u8) -> Unit {

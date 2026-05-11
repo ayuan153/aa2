@@ -71,6 +71,10 @@ pub struct StatModifier {
     pub bonus_hp_regen: f32,
     /// Bonus strength (adds HP + damage if STR primary).
     pub bonus_strength: f32,
+    /// Bonus agility (adds armor, AS, damage if AGI primary).
+    pub bonus_agi: f32,
+    /// Bonus intelligence (adds mana, mana regen, damage if INT primary).
+    pub bonus_int: f32,
     /// Status resistance (0.5 = 50% shorter debuffs).
     pub status_resistance: f32,
 }
@@ -238,10 +242,47 @@ pub fn total_stat_modifier(buffs: &[Buff]) -> StatModifier {
             result.bonus_magic_resistance += m.bonus_magic_resistance;
             result.bonus_hp_regen += m.bonus_hp_regen;
             result.bonus_strength += m.bonus_strength;
+            result.bonus_agi += m.bonus_agi;
+            result.bonus_int += m.bonus_int;
             result.status_resistance += m.status_resistance;
         }
     }
     result
+}
+
+/// Separate stat modifiers into base reductions (from debuffs) and bonus additions (from buffs).
+/// Base reductions are floored so base stats can't go below 1.
+pub fn compute_stat_components(buffs: &[Buff]) -> (StatModifier, StatModifier) {
+    let mut reductions = StatModifier::default();
+    let mut additions = StatModifier::default();
+    for buff in buffs {
+        if let Some(ref m) = buff.stat_modifier {
+            if buff.is_debuff {
+                reductions.bonus_strength += m.bonus_strength;
+                reductions.bonus_agi += m.bonus_agi;
+                reductions.bonus_int += m.bonus_int;
+                reductions.bonus_armor += m.bonus_armor;
+                reductions.bonus_attack_speed += m.bonus_attack_speed;
+                reductions.bonus_move_speed += m.bonus_move_speed;
+                reductions.bonus_damage += m.bonus_damage;
+                reductions.bonus_magic_resistance += m.bonus_magic_resistance;
+                reductions.bonus_hp_regen += m.bonus_hp_regen;
+                reductions.status_resistance += m.status_resistance;
+            } else {
+                additions.bonus_strength += m.bonus_strength;
+                additions.bonus_agi += m.bonus_agi;
+                additions.bonus_int += m.bonus_int;
+                additions.bonus_armor += m.bonus_armor;
+                additions.bonus_attack_speed += m.bonus_attack_speed;
+                additions.bonus_move_speed += m.bonus_move_speed;
+                additions.bonus_damage += m.bonus_damage;
+                additions.bonus_magic_resistance += m.bonus_magic_resistance;
+                additions.bonus_hp_regen += m.bonus_hp_regen;
+                additions.status_resistance += m.status_resistance;
+            }
+        }
+    }
+    (reductions, additions)
 }
 
 #[cfg(test)]

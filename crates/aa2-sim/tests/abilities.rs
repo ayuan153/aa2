@@ -1338,7 +1338,8 @@ fn test_essence_shift_stats_floor_at_one() {
             status: StatusFlags::default(),
             stat_modifier: Some(StatModifier {
                 bonus_strength: -1.0,
-                bonus_armor: -0.167,
+                bonus_agi: -1.0,
+                bonus_int: -1.0,
                 ..StatModifier::default()
             }),
             source_id: 0,
@@ -1349,7 +1350,7 @@ fn test_essence_shift_stats_floor_at_one() {
     let mut sim = Simulation::with_seed(vec![attacker, target], 42);
     sim.step(); // Process buffs → STR scaling kicks in
 
-    // Target's max_hp should be floored at 1, not negative
+    // Target's max_hp should be floored: base STR floors at 1, so HP = 120 + 1*22 = 142
     assert!(sim.units[1].max_hp >= 1.0,
         "max_hp should floor at 1, got {:.1}", sim.units[1].max_hp);
     assert!(sim.units[1].hp >= 1.0,
@@ -1365,7 +1366,7 @@ fn test_essence_shift_stats_floor_at_one() {
             dispel_type: DispelType::Undispellable,
             status: StatusFlags::default(),
             stat_modifier: Some(StatModifier {
-                bonus_armor: 3.0 * 0.167, // 3 AGI worth of armor
+                bonus_agi: 3.0,
                 ..StatModifier::default()
             }),
             source_id: 0,
@@ -1374,8 +1375,138 @@ fn test_essence_shift_stats_floor_at_one() {
     }
 
     sim.step();
-    // Attacker should have massive armor bonus (50 * 3 AGI * 0.167 = 25 armor from buffs)
-    let modifier = aa2_sim::buff::total_stat_modifier(&sim.units[0].buffs);
-    assert!(modifier.bonus_armor > 20.0,
-        "Attacker should have large armor bonus from ES stacks, got {:.1}", modifier.bonus_armor);
+    // Attacker should have massive armor bonus from AGI (50 * 3 AGI * 0.167 = 25 armor from buffs)
+    // Total armor = BASE_ARMOR + (base_agi + 150) * 0.167
+    assert!(sim.units[0].armor > 20.0,
+        "Attacker should have large armor from ES AGI stacks, got {:.1}", sim.units[0].armor);
+}
+
+#[test]
+fn test_hg_protects_base_from_es() {
+    // BUG 1: ES debuffs should only reduce BASE stats, not bonus stats.
+    // A hero with 20 base STR + 28 bonus STR from HG, hit by 30 ES debuffs:
+    // effective_base_str = max(20 - 30, 1) = 1
+    // total_str = 1 + 28 = 29
+    // max_hp = 120 + 29 * 22 = 758
+    use aa2_sim::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
+
+    let hero = make_hero(); // 20 base STR
+    let mut target = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    let dummy = Unit::from_hero_def(&hero, 1, 1, Vec2::new(9999.0, 0.0));
+
+    // Heavenly Grace buff: +28 STR
+    target.buffs.push(Buff {
+        name: "heavenly_grace".to_string(),
+        remaining_ticks: 9000,
+        tick_effect: None,
+        stacking: StackBehavior::RefreshDuration,
+        dispel_type: DispelType::BasicDispel,
+        status: StatusFlags::default(),
+        stat_modifier: Some(StatModifier {
+            bonus_strength: 28.0,
+            ..StatModifier::default()
+        }),
+        source_id: 0,
+        is_debuff: false,
+    });
+
+    // 30 ES debuffs: -1 STR each
+    for _ in 0..30 {
+        target.buffs.push(Buff {
+            name: "essence_shift_debuff".to_string(),
+            remaining_ticks: 9000,
+            tick_effect: None,
+            stacking: StackBehavior::Independent,
+            dispel_type: DispelType::Undispellable,
+            status: StatusFlags::default(),
+            stat_modifier: Some(StatModifier {
+                bonus_strength: -1.0,
+                bonus_agi: -1.0,
+                bonus_int: -1.0,
+                ..StatModifier::default()
+            }),
+            source_id: 1,
+            is_debuff: true,
+        });
+    }
+
+    let mut sim = Simulation::with_seed(vec![target, dummy], 42);
+    sim.step();
+
+    // effective_base_str = max(20 - 30, 1) = 1
+    // total_str = 1 + 28 = 29
+    // expected_max_hp = 120 + 29 * 22 = 758
+    let expected_hp = 120.0 + 29.0 * 22.0;
+    assert!((sim.units[0].max_hp - expected_hp).abs() < 1.0,
+        "HG should protect from ES: expected max_hp={expected_hp}, got {:.1}", sim.units[0].max_hp);
+
+    // Without the fix, the old behavior would compute:
+    // net_str_modifier = -30 + 28 = -2, max_hp = base_max_hp + (-2)*22 = 560 - 44 = 516
+    // The new behavior correctly gives 758
+    assert!(sim.units[0].max_hp > 700.0,
+        "max_hp should be >700 with HG protecting base, got {:.1}", sim.units[0].max_hp);
+}
+
+#[test]
+fn test_agi_hero_damage_increases_with_es_buff() {
+    // BUG 2: Primary attribute damage should update with stat changes.
+    // An AGI hero gaining AGI from ES buffs should deal more damage.
+    use aa2_sim::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
+
+    let hero = HeroDef {
+        name: "Juggernaut".to_string(),
+        primary_attribute: Attribute::Agility,
+        base_str: 20.0,
+        base_agi: 26.0,
+        base_int: 14.0,
+        str_gain: 2.0,
+        agi_gain: 3.0,
+        int_gain: 1.5,
+        base_attack_time: 1.4,
+        attack_range: 150.0,
+        attack_point: 0.33,
+        move_speed: 300.0,
+        turn_rate: 0.6,
+        collision_radius: 24.0,
+        tier: 1,
+        is_melee: true,
+        base_damage_min: 20.0,
+        base_damage_max: 24.0,
+        projectile_speed: None,
+    };
+
+    let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    let dummy = Unit::from_hero_def(&hero, 1, 1, Vec2::new(9999.0, 0.0));
+
+    // Initial damage: base_damage + primary_agi = 20+26=46 to 24+26=50
+    assert!((attacker.damage_min - 46.0).abs() < 0.01);
+    assert!((attacker.damage_max - 50.0).abs() < 0.01);
+
+    // Apply 10 ES buffs: +3 AGI each = +30 AGI
+    for _ in 0..10 {
+        attacker.buffs.push(Buff {
+            name: "essence_shift_buff".to_string(),
+            remaining_ticks: 9000,
+            tick_effect: None,
+            stacking: StackBehavior::Independent,
+            dispel_type: DispelType::Undispellable,
+            status: StatusFlags::default(),
+            stat_modifier: Some(StatModifier {
+                bonus_agi: 3.0,
+                ..StatModifier::default()
+            }),
+            source_id: 0,
+            is_debuff: false,
+        });
+    }
+
+    let mut sim = Simulation::with_seed(vec![attacker, dummy], 42);
+    sim.step();
+
+    // After buffs: total_agi = 26 + 30 = 56, damage = base + 56
+    // damage_min = 20 + 56 = 76, damage_max = 24 + 56 = 80
+    assert!((sim.units[0].damage_min - 76.0).abs() < 0.01,
+        "AGI hero damage_min should increase with ES buffs: expected 76, got {:.1}", sim.units[0].damage_min);
+    assert!((sim.units[0].damage_max - 80.0).abs() < 0.01,
+        "AGI hero damage_max should increase with ES buffs: expected 80, got {:.1}", sim.units[0].damage_max);
 }

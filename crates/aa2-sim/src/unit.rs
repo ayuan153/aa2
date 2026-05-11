@@ -111,6 +111,16 @@ pub struct Unit {
     pub base_agi: f32,
     /// Base INT (from HeroDef, only changes via permanent steal).
     pub base_int: f32,
+    /// Raw base damage min from HeroDef (without primary attribute bonus).
+    pub hero_base_damage_min: f32,
+    /// Raw base damage max from HeroDef (without primary attribute bonus).
+    pub hero_base_damage_max: f32,
+    /// Primary attribute for this unit.
+    pub primary_attribute: Attribute,
+    /// Base attack time (BAT) for attack interval calculation.
+    pub base_attack_time: f32,
+    /// Base attack point (frontswing) before attack speed scaling.
+    pub base_attack_point: f32,
 }
 
 /// Derived combat stats from attributes.
@@ -204,6 +214,11 @@ impl Unit {
             base_str: def.base_str,
             base_agi: def.base_agi,
             base_int: def.base_int,
+            hero_base_damage_min: def.base_damage_min,
+            hero_base_damage_max: def.base_damage_max,
+            primary_attribute: def.primary_attribute.clone(),
+            base_attack_time: def.base_attack_time,
+            base_attack_point: def.attack_point,
         }
     }
 

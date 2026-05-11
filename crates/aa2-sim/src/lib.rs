@@ -273,20 +273,46 @@ impl Simulation {
             for name in result.expired {
                 events.push(CombatEvent::BuffExpired { tick, target_id: unit.id, name });
             }
-            // STR bonus HP scaling (floor at 1 — stats can't go negative)
-            let modifier = buff::total_stat_modifier(&unit.buffs);
-            let expected_max_hp = (unit.base_max_hp + modifier.bonus_strength * 22.0).max(1.0);
+            // Recompute effective stats: debuffs reduce base (floored at 1), buffs add on top
+            let (reductions, additions) = buff::compute_stat_components(&unit.buffs);
+
+            let eff_base_str = (unit.base_str + reductions.bonus_strength).max(1.0);
+            let eff_base_agi = (unit.base_agi + reductions.bonus_agi).max(1.0);
+            let eff_base_int = (unit.base_int + reductions.bonus_int).max(1.0);
+
+            let total_str = eff_base_str + additions.bonus_strength;
+            let total_agi = eff_base_agi + additions.bonus_agi;
+            let total_int = eff_base_int + additions.bonus_int;
+
+            // HP from STR
+            let expected_max_hp = (unit::BASE_HP + total_str * 22.0).max(1.0);
             let hp_diff = expected_max_hp - unit.max_hp;
             if hp_diff.abs() > 0.01 {
                 unit.max_hp = expected_max_hp;
                 if hp_diff > 0.0 {
-                    // Gaining STR: increase current HP (effective heal)
                     unit.hp += hp_diff;
                 } else {
-                    // Losing STR: preserve current HP, just cap at new max
                     unit.hp = unit.hp.min(unit.max_hp).max(1.0);
                 }
             }
+
+            // Armor from AGI + direct armor modifiers
+            unit.armor = unit::BASE_ARMOR + total_agi * 0.167
+                + reductions.bonus_armor + additions.bonus_armor;
+
+            // Attack speed and interval from AGI
+            let total_as = (100.0 + total_agi + reductions.bonus_attack_speed + additions.bonus_attack_speed).clamp(20.0, 700.0);
+            unit.attack_interval = unit::compute_attack_interval(unit.base_attack_time, total_as);
+            unit.attack_point = unit::compute_effective_attack_point(unit.base_attack_point, total_as);
+
+            // Damage from primary attribute
+            let primary_val = match unit.primary_attribute {
+                aa2_data::Attribute::Strength => total_str,
+                aa2_data::Attribute::Agility => total_agi,
+                aa2_data::Attribute::Intelligence => total_int,
+            };
+            unit.damage_min = unit.hero_base_damage_min + primary_val;
+            unit.damage_max = unit.hero_base_damage_max + primary_val;
         }
         self.combat_log.extend(events);
     }
