@@ -43,6 +43,35 @@ pub fn try_find_cast(
                     return Some((i, Some(id), Some(pos)));
                 }
             }
+            TargetType::SingleAllyHG => {
+                let allies_in_range: Vec<_> = units.iter()
+                    .filter(|u| u.id != unit.id && u.team == unit.team && u.is_alive())
+                    .filter(|u| unit.position.distance(u.position) <= cast_range)
+                    .collect();
+
+                if allies_in_range.is_empty() {
+                    return Some((i, Some(unit.id), Some(unit.position)));
+                }
+
+                // First cast (fresh cooldown): highest y-axis ally
+                // Subsequent casts: furthest ally from caster
+                let target = if ability.cooldown_remaining == 0.0 && ability.casts == 0 {
+                    allies_in_range.iter()
+                        .max_by(|a, b| a.position.y.partial_cmp(&b.position.y).unwrap())
+                } else {
+                    allies_in_range.iter()
+                        .max_by(|a, b| {
+                            let da = unit.position.distance(a.position);
+                            let db = unit.position.distance(b.position);
+                            da.partial_cmp(&db).unwrap()
+                        })
+                };
+
+                if let Some(ally) = target {
+                    return Some((i, Some(ally.id), Some(ally.position)));
+                }
+                return Some((i, Some(unit.id), Some(unit.position)));
+            }
             TargetType::NoTarget => {
                 return Some((i, None, None));
             }

@@ -67,6 +67,7 @@ fn heavenly_grace_ability() -> AbilityDef {
             hp_regen: vec![20.0],
             strength: vec![30.0],
             status_resistance: vec![0.5],
+            dispel_on_cast: false,
         }],
         description: String::new(),
         aoe_shape: None,
@@ -498,4 +499,173 @@ fn test_dark_pact_full_pipeline() {
         .collect();
     println!("Pulse events: {}", pulse_events.len());
     assert!(!pulse_events.is_empty(), "Dark Pact pulses should have fired");
+}
+
+#[test]
+fn test_hg_dispels_on_cast() {
+    use aa2_sim::ability::execute_ability;
+
+    let hero = make_hero();
+    let mut u0 = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    let mut u1 = Unit::from_hero_def(&hero, 1, 0, Vec2::new(100.0, 0.0)); // ally
+
+    // Apply a debuff to the ally
+    u1.buffs.push(Buff {
+        name: "curse".to_string(),
+        remaining_ticks: 300,
+        tick_effect: None,
+        stacking: aa2_sim::buff::StackBehavior::RefreshDuration,
+        dispel_type: DispelType::StrongDispel,
+        status: StatusFlags { silenced: true, ..StatusFlags::default() },
+        stat_modifier: None,
+        source_id: 99,
+        is_debuff: true,
+    });
+
+    let mut units = vec![u0, u1];
+    let ability = AbilityDef {
+        name: "Heavenly Grace".to_string(),
+        cooldown: 10.0,
+        mana_cost: vec![50.0],
+        cast_point: 0.0,
+        targeting: TargetType::SingleAlly,
+        effects: vec![Effect::BuffTargetAndSelf {
+            name: "Heavenly Grace".to_string(),
+            duration: vec![10.0],
+            hp_regen: vec![20.0],
+            strength: vec![30.0],
+            status_resistance: vec![0.5],
+            dispel_on_cast: true,
+        }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 600.0,
+    };
+
+    execute_ability(
+        &ability, 1, 0, 0, Vec2::new(0.0, 0.0),
+        Some(1), Some(Vec2::new(100.0, 0.0)),
+        &mut units, 1, &mut Vec::new(),
+    );
+
+    // Debuff should be removed from ally
+    assert!(
+        !units[1].buffs.iter().any(|b| b.name == "curse"),
+        "Strong dispel should remove the curse debuff"
+    );
+    // HG buff should be applied
+    assert!(units[1].buffs.iter().any(|b| b.name == "Heavenly Grace"));
+}
+
+#[test]
+fn test_hg_targets_highest_y_ally() {
+    use aa2_sim::ai::try_find_cast;
+    use aa2_sim::cast::AbilityState;
+
+    let hero = make_hero();
+    let mut u0 = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    u0.abilities.push(AbilityState {
+        def: AbilityDef {
+            name: "Heavenly Grace".to_string(),
+            cooldown: 10.0,
+            mana_cost: vec![50.0],
+            cast_point: 0.0,
+            targeting: TargetType::SingleAllyHG,
+            effects: vec![],
+            description: String::new(),
+            aoe_shape: None,
+            cast_range: 600.0,
+        },
+        cooldown_remaining: 0.0,
+        level: 1,
+        casts: 0, // first cast
+    });
+
+    // Allies at different y positions
+    let u1 = Unit::from_hero_def(&hero, 1, 0, Vec2::new(50.0, 100.0));  // y=100
+    let u2 = Unit::from_hero_def(&hero, 2, 0, Vec2::new(50.0, 300.0));  // y=300 (highest)
+    let u3 = Unit::from_hero_def(&hero, 3, 0, Vec2::new(50.0, 200.0));  // y=200
+
+    let units = vec![u0, u1, u2, u3];
+    let result = try_find_cast(&units[0], &units);
+
+    assert!(result.is_some());
+    let (_, target_id, _) = result.unwrap();
+    assert_eq!(target_id, Some(2), "Should target ally with highest y (id=2, y=300)");
+}
+
+#[test]
+fn test_hg_self_cast_when_no_allies() {
+    use aa2_sim::ai::try_find_cast;
+    use aa2_sim::cast::AbilityState;
+
+    let hero = make_hero();
+    let mut u0 = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    u0.abilities.push(AbilityState {
+        def: AbilityDef {
+            name: "Heavenly Grace".to_string(),
+            cooldown: 10.0,
+            mana_cost: vec![50.0],
+            cast_point: 0.0,
+            targeting: TargetType::SingleAllyHG,
+            effects: vec![],
+            description: String::new(),
+            aoe_shape: None,
+            cast_range: 600.0,
+        },
+        cooldown_remaining: 0.0,
+        level: 1,
+        casts: 0,
+    });
+
+    // Only enemies, no allies
+    let u1 = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
+
+    let units = vec![u0, u1];
+    let result = try_find_cast(&units[0], &units);
+
+    assert!(result.is_some());
+    let (_, target_id, _) = result.unwrap();
+    assert_eq!(target_id, Some(0), "Should self-cast when no allies in range");
+}
+
+#[test]
+fn test_hg_targets_furthest_on_subsequent_cast() {
+    use aa2_sim::ai::try_find_cast;
+    use aa2_sim::cast::AbilityState;
+
+    let hero = make_hero();
+    let mut u0 = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    u0.abilities.push(AbilityState {
+        def: AbilityDef {
+            name: "Heavenly Grace".to_string(),
+            cooldown: 10.0,
+            mana_cost: vec![50.0],
+            cast_point: 0.0,
+            targeting: TargetType::SingleAllyHG,
+            effects: vec![],
+            description: String::new(),
+            aoe_shape: None,
+            cast_range: 600.0,
+        },
+        cooldown_remaining: 0.0,
+        level: 1,
+        casts: 1, // subsequent cast
+    });
+
+    // Ally at y=300 but close (50 units away)
+    let u1 = Unit::from_hero_def(&hero, 1, 0, Vec2::new(50.0, 300.0));
+    // Ally at y=100 but far (500 units away)
+    let u2 = Unit::from_hero_def(&hero, 2, 0, Vec2::new(400.0, 300.0));
+
+    let units = vec![u0, u1, u2];
+    let result = try_find_cast(&units[0], &units);
+
+    assert!(result.is_some());
+    let (_, target_id, _) = result.unwrap();
+    assert_eq!(target_id, Some(2), "Should target furthest ally on subsequent cast");
 }

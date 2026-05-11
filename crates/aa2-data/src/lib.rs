@@ -18,6 +18,7 @@ pub enum DamageType {
 pub enum TargetType {
     SingleEnemy,
     SingleAlly,
+    SingleAllyHG,
     PointAoE,
     NoTarget,
     Passive,
@@ -56,6 +57,8 @@ pub enum Effect {
         hp_regen: Vec<f32>,
         strength: Vec<f32>,
         status_resistance: Vec<f32>,
+        #[serde(default)]
+        dispel_on_cast: bool,
     },
     /// Expanding wave AoE stun (Ravage). Hits units when wave reaches them.
     ExpandingWaveStun {

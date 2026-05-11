@@ -199,6 +199,7 @@ impl Unit {
                 def: ability_def.clone(),
                 cooldown_remaining: 0.0,
                 level: *level,
+                casts: 0,
             });
         }
         unit

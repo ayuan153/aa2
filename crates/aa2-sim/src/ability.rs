@@ -43,7 +43,7 @@ pub fn execute_ability(
             vec![]
         }
         _ => {
-            // Single-target: resolve target
+            // Single-target (SingleEnemy, SingleAlly, SingleAllyHG): resolve target
             match target_id {
                 Some(tid) => match units.iter().position(|u| u.id == tid && u.is_alive()) {
                     Some(idx) => vec![idx],
@@ -141,7 +141,7 @@ pub fn execute_ability(
                 });
             }
             Effect::BuffTargetAndSelf {
-                name, duration, hp_regen, strength, status_resistance,
+                name, duration, hp_regen, strength, status_resistance, dispel_on_cast,
             } => {
                 let dur_ticks = (value_at_level(duration, level) * 30.0) as u32;
                 let modifier = StatModifier {
@@ -165,12 +165,18 @@ pub fn execute_ability(
                 if let Some(tid) = target_id
                     && let Some(target) = units.iter_mut().find(|u| u.id == tid && u.is_alive())
                 {
+                    if *dispel_on_cast {
+                        crate::buff::dispel(&mut target.buffs, DispelType::StrongDispel);
+                    }
                     target.status_resistance += modifier.status_resistance;
                     apply_buff(&mut target.buffs, make_buff());
                     events.push(CombatEvent::BuffApplied { tick, target_id: tid, name: name.clone() });
                 }
                 // Apply to caster
                 if let Some(caster) = units.iter_mut().find(|u| u.id == caster_id && u.is_alive()) {
+                    if *dispel_on_cast {
+                        crate::buff::dispel(&mut caster.buffs, DispelType::StrongDispel);
+                    }
                     caster.status_resistance += modifier.status_resistance;
                     apply_buff(&mut caster.buffs, make_buff());
                     events.push(CombatEvent::BuffApplied { tick, target_id: caster_id, name: name.clone() });

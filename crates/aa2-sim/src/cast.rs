@@ -13,6 +13,8 @@ pub struct AbilityState {
     pub cooldown_remaining: f32,
     /// Current ability level (0-indexed into base arrays in effects).
     pub level: u8,
+    /// Number of times this ability has been cast.
+    pub casts: u32,
 }
 
 /// An in-progress cast on a unit.
@@ -97,7 +99,7 @@ mod tests {
     fn test_cast_point_timing() {
         // 0.3s cast point at 30 ticks/sec = 9 ticks
         let ability_def = make_test_ability(0.3, 10.0, 100.0);
-        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0 }];
+        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0, casts: 0 }];
         let mut cast_state = Some(CastInProgress {
             ability_index: 0,
             target_id: None,
@@ -121,7 +123,7 @@ mod tests {
     #[test]
     fn test_mana_deduction() {
         let ability_def = make_test_ability(0.1, 10.0, 75.0);
-        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0 }];
+        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0, casts: 0 }];
         let mut cast_state = Some(CastInProgress {
             ability_index: 0,
             target_id: None,
@@ -150,7 +152,7 @@ mod tests {
     #[test]
     fn test_cast_interrupt() {
         let ability_def = make_test_ability(0.5, 10.0, 100.0);
-        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0 }];
+        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0, casts: 0 }];
         let mut cast_state = Some(CastInProgress {
             ability_index: 0,
             target_id: None,
@@ -181,7 +183,7 @@ mod tests {
     #[test]
     fn test_cooldown_tick() {
         let ability_def = make_test_ability(0.3, 1.0, 50.0);
-        let mut abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 1.0, level: 0 }];
+        let mut abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 1.0, level: 0, casts: 0 }];
 
         // 1.0s cooldown at 30 ticks/sec = 30 ticks
         for i in 0..30 {

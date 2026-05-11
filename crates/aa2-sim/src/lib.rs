@@ -303,6 +303,7 @@ impl Simulation {
                 CastTickResult::Completed { ability_index, mana_cost } => {
                     self.units[i].mana -= mana_cost;
                     self.units[i].abilities[ability_index].cooldown_remaining = self.units[i].abilities[ability_index].def.cooldown;
+                    self.units[i].abilities[ability_index].casts += 1;
                     let ability_def = self.units[i].abilities[ability_index].def.clone();
                     let level = self.units[i].abilities[ability_index].level;
                     let caster_id = self.units[i].id;
@@ -1026,6 +1027,7 @@ mod tests {
             },
             cooldown_remaining: 0.0,
             level: 0,
+            casts: 0,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1059,6 +1061,7 @@ mod tests {
             },
             cooldown_remaining: 0.0,
             level: 0,
+            casts: 0,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1095,6 +1098,7 @@ mod tests {
             },
             cooldown_remaining: 5.0, // on cooldown
             level: 0,
+            casts: 0,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1132,6 +1136,7 @@ mod tests {
             },
             cooldown_remaining: 0.0,
             level: 0,
+            casts: 0,
         });
 
         u0.buffs.push(Buff {
