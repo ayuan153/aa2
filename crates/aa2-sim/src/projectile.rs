@@ -9,8 +9,12 @@ pub struct Projectile {
     pub attacker_id: u32,
     /// Damage to deal on impact (after attack modifiers, before armor).
     pub damage: f32,
+    /// Bonus magical damage from Glaives (before magic resist).
+    pub bonus_magical_damage: f32,
     /// Lifesteal percentage from attack modifiers (0.0 if none).
     pub lifesteal_pct: f32,
+    /// Whether Glaives fired (for bounce logic).
+    pub glaives_active: bool,
     /// Current world position.
     pub position: Vec2,
     /// Travel speed in units per second.

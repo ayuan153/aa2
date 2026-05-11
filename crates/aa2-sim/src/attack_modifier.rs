@@ -57,6 +57,10 @@ pub struct AttackResult {
     pub lifesteal_pct: f32,
     /// Post-crit flat bonus (Fury Swipes).
     pub post_crit_bonus: f32,
+    /// Bonus magical damage from Glaives of Wisdom (before magic resist).
+    pub bonus_magical_damage: f32,
+    /// Whether Glaives fired this attack (for bounce logic).
+    pub glaives_active: bool,
 }
 
 /// Process attack modifiers when an attack lands. Called BEFORE armor reduction.
@@ -73,6 +77,8 @@ pub(crate) fn process_attack_modifiers(
     let mut crit_multiplier = 1.0_f32;
     let mut lifesteal_pct = 0.0_f32;
     let mut post_crit_bonus = 0.0_f32;
+    let mut bonus_magical_damage = 0.0_f32;
+    let mut glaives_active = false;
 
     let ability_count = attacker.abilities.len();
     for ai in 0..ability_count {
@@ -103,6 +109,19 @@ pub(crate) fn process_attack_modifiers(
                     let expiry = tick + (duration_secs * TICK_RATE) as u32;
                     set_fury_swipes_stacks(&mut attacker.attack_modifier_state, target_id, stacks + 1, expiry);
                 }
+                Effect::GlaivesOfWisdom { int_damage_factor, mana_cost, .. } => {
+                    let cost = value_at_level(mana_cost, level);
+                    if attacker.mana < cost {
+                        continue; // Can't afford — skip
+                    }
+                    // TODO: check debuff immunity on target
+                    attacker.mana -= cost;
+                    // Total INT = base_int (floored at 1)
+                    let total_int = crate::unit::effective_stat(attacker.base_int, 0.0);
+                    let factor = value_at_level(int_damage_factor, level);
+                    bonus_magical_damage += total_int * factor;
+                    glaives_active = true;
+                }
                 _ => {}
             }
         }
@@ -123,7 +142,7 @@ pub(crate) fn process_attack_modifiers(
     }
 
     let damage = base_damage * crit_multiplier + post_crit_bonus;
-    AttackResult { damage, crit_multiplier, lifesteal_pct, post_crit_bonus }
+    AttackResult { damage, crit_multiplier, lifesteal_pct, post_crit_bonus, bonus_magical_damage, glaives_active }
 }
 
 /// Apply post-hit effects: Essence Shift stat steal, Chaos Strike lifesteal.
@@ -635,5 +654,170 @@ mod tests {
             projectile_speed: None,
         };
         Unit::from_hero_def(&def, id, team, Vec2::new(0.0, 0.0))
+    }
+
+    #[test]
+    fn test_glaives_bonus_damage() {
+        use aa2_data::{AbilityDef, TargetType};
+        use crate::cast::AbilityState;
+
+        let mut rng = Rng::new(42);
+        let mut attacker = make_test_unit(0, 0);
+        attacker.mana = 100.0;
+        attacker.base_int = 40.0;
+
+        attacker.abilities.push(AbilityState {
+            def: AbilityDef {
+                name: "Glaives".to_string(),
+                cooldown: vec![0.0],
+                mana_cost: vec![0.0],
+                cast_point: 0.0,
+                targeting: TargetType::Passive,
+                effects: vec![Effect::GlaivesOfWisdom {
+                    int_damage_factor: vec![0.8], // 80% of INT
+                    mana_cost: vec![15.0],
+                    steal_int_on_kill: vec![0.0],
+                    steal_radius: 900.0,
+                    bounce_radius: vec![0.0],
+                }],
+                description: String::new(),
+                aoe_shape: None,
+                cast_range: 0.0,
+            },
+            cooldown_remaining: 0.0,
+            level: 1,
+            casts: 0,
+        });
+
+        let result = process_attack_modifiers(&mut attacker, 1, 50.0, 0, &mut rng, None);
+        // 80% of 40 INT = 32 bonus magical damage
+        assert!((result.bonus_magical_damage - 32.0).abs() < 0.01, "Expected 32, got {}", result.bonus_magical_damage);
+        assert!(result.glaives_active);
+        assert!((attacker.mana - 85.0).abs() < 0.01); // 100 - 15
+    }
+
+    #[test]
+    fn test_glaives_mana_cost() {
+        use aa2_data::{AbilityDef, TargetType};
+        use crate::cast::AbilityState;
+
+        let mut rng = Rng::new(42);
+        let mut attacker = make_test_unit(0, 0);
+        attacker.mana = 10.0; // Not enough for 15 mana cost
+        attacker.base_int = 40.0;
+
+        attacker.abilities.push(AbilityState {
+            def: AbilityDef {
+                name: "Glaives".to_string(),
+                cooldown: vec![0.0],
+                mana_cost: vec![0.0],
+                cast_point: 0.0,
+                targeting: TargetType::Passive,
+                effects: vec![Effect::GlaivesOfWisdom {
+                    int_damage_factor: vec![0.8],
+                    mana_cost: vec![15.0],
+                    steal_int_on_kill: vec![0.0],
+                    steal_radius: 900.0,
+                    bounce_radius: vec![0.0],
+                }],
+                description: String::new(),
+                aoe_shape: None,
+                cast_range: 0.0,
+            },
+            cooldown_remaining: 0.0,
+            level: 1,
+            casts: 0,
+        });
+
+        let result = process_attack_modifiers(&mut attacker, 1, 50.0, 0, &mut rng, None);
+        // No mana = no bonus damage
+        assert!((result.bonus_magical_damage - 0.0).abs() < 0.01);
+        assert!(!result.glaives_active);
+        assert!((attacker.mana - 10.0).abs() < 0.01); // mana unchanged
+    }
+
+    #[test]
+    fn test_glaives_bounce() {
+        use aa2_data::{AbilityDef, TargetType, Attribute, HeroDef};
+        use crate::cast::AbilityState;
+        use crate::vec2::Vec2;
+        use crate::{Simulation, CombatEvent};
+
+        let hero = HeroDef {
+            name: "Silencer".to_string(),
+            primary_attribute: Attribute::Intelligence,
+            base_str: 20.0,
+            base_agi: 20.0,
+            base_int: 40.0,
+            str_gain: 2.0,
+            agi_gain: 2.0,
+            int_gain: 3.0,
+            base_attack_time: 1.7,
+            attack_range: 600.0,
+            attack_point: 0.3,
+            move_speed: 300.0,
+            turn_rate: 0.6,
+            collision_radius: 24.0,
+            tier: 1,
+            is_melee: false,
+            base_damage_min: 20.0,
+            base_damage_max: 30.0,
+            projectile_speed: Some(1200.0),
+        };
+
+        let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+        attacker.mana = 500.0;
+        attacker.abilities.push(AbilityState {
+            def: AbilityDef {
+                name: "Glaives".to_string(),
+                cooldown: vec![0.0],
+                mana_cost: vec![0.0],
+                cast_point: 0.0,
+                targeting: TargetType::Passive,
+                effects: vec![Effect::GlaivesOfWisdom {
+                    int_damage_factor: vec![1.0], // 100% INT
+                    mana_cost: vec![15.0],
+                    steal_int_on_kill: vec![0.0],
+                    steal_radius: 900.0,
+                    bounce_radius: vec![500.0], // Gaben bounce
+                }],
+                description: String::new(),
+                aoe_shape: None,
+                cast_range: 0.0,
+            },
+            cooldown_remaining: 0.0,
+            level: 9,
+            casts: 0,
+        });
+
+        // Target at 100 units, secondary enemy at 200 units (within 500 of target)
+        let target = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
+        let secondary = Unit::from_hero_def(&hero, 2, 1, Vec2::new(200.0, 0.0));
+        let secondary_hp_before = secondary.hp;
+
+        let mut sim = Simulation::with_seed(vec![attacker, target, secondary], 42);
+        // Run until an attack lands
+        for _ in 0..300 {
+            sim.step();
+            if sim.combat_log.iter().any(|e| matches!(e, CombatEvent::ProjectileHit { .. })) {
+                break;
+            }
+        }
+        // Secondary target should have taken Glaives bounce damage
+        let secondary_hp_after = sim.units[2].hp;
+        assert!(secondary_hp_after < secondary_hp_before,
+            "Secondary should take bounce damage: before={secondary_hp_before}, after={secondary_hp_after}");
+    }
+
+    #[test]
+    fn test_stat_steal_floor() {
+        use crate::unit::effective_stat;
+
+        // base_int = 5, bonus = -10 → effective should be 1 (floored)
+        assert!((effective_stat(5.0, -10.0) - 1.0).abs() < 0.01);
+        // base_int = 20, bonus = -5 → effective should be 15
+        assert!((effective_stat(20.0, -5.0) - 15.0).abs() < 0.01);
+        // base_int = 1, bonus = -1 → effective should be 1 (can't go below)
+        assert!((effective_stat(1.0, -1.0) - 1.0).abs() < 0.01);
     }
 }

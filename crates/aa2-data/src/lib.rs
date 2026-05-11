@@ -88,6 +88,15 @@ pub enum Effect {
         agi_gain: Vec<f32>,
         duration: Vec<f32>,
     },
+    /// Glaives of Wisdom: mana-cost attack modifier dealing bonus magical damage based on INT.
+    /// Does not pierce debuff immunity. Super steals INT on kill. Gaben bounces.
+    GlaivesOfWisdom {
+        int_damage_factor: Vec<f32>,
+        mana_cost: Vec<f32>,
+        steal_int_on_kill: Vec<f32>,
+        steal_radius: f32,
+        bounce_radius: Vec<f32>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -49,3 +49,9 @@ fn load_essence_shift() {
     let ability = aa2_data::load_ability_def(Path::new("../../data/abilities/essence_shift.ron")).unwrap();
     assert_eq!(ability.name, "Essence Shift");
 }
+
+#[test]
+fn load_glaives() {
+    let ability = aa2_data::load_ability_def(Path::new("../../data/abilities/glaives_of_wisdom.ron")).unwrap();
+    assert_eq!(ability.name, "Glaives of Wisdom");
+}

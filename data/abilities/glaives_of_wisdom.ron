@@ -1,0 +1,31 @@
+// Glaives of Wisdom - Silencer's INT-scaling attack modifier
+// Each attack costs mana and deals bonus magical damage based on wielder's INT.
+// Does NOT pierce debuff immunity (becomes regular attack vs immune targets).
+//
+// AA Scaling: L1=35%, L2=50%, L3=80% INT as bonus magical damage. L4-5=80%.
+// Super (L6): Steal +1 INT permanently when enemy dies within 900 radius (persists between rounds)
+// Gaben (L9): Attack bounces to closest enemy within 500 radius of target
+AbilityDef(
+    name: "Glaives of Wisdom",
+    cooldown: [0.0],
+    mana_cost: [15.0],  // Flat 15 mana per attack at all levels
+    cast_point: 0.0,
+    targeting: Passive,
+    effects: [
+        GlaivesOfWisdom(
+            // INT damage factor: L1=0.35, L2=0.50, L3=0.80, L4-5=0.80, L6-8=0.80, L9=0.80
+            int_damage_factor: [0.35, 0.50, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80],
+            // Mana cost per attack (flat 15 at all levels in AA)
+            mana_cost: [15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0],
+            // INT stolen on kill: 0 at base, 1 at Super+
+            steal_int_on_kill: [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+            // Kill-steal radius
+            steal_radius: 900.0,
+            // Bounce radius: 0 = no bounce, 500 at Gaben
+            bounce_radius: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 500.0],
+        ),
+    ],
+    description: "Attacks deal bonus magical damage based on Intelligence. Costs mana per attack.",
+    aoe_shape: None,
+    cast_range: 0.0,
+)

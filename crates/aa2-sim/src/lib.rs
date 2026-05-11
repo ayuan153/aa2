@@ -458,13 +458,23 @@ impl Simulation {
 
                     if is_melee {
                         self.units[target_idx].hp -= actual_dmg;
+                        // Glaives bonus magical damage (separate from physical)
+                        let magic_dmg = if atk_result.bonus_magical_damage > 0.0 {
+                            combat::apply_magic_resistance(atk_result.bonus_magical_damage, self.units[target_idx].magic_resistance)
+                        } else { 0.0 };
+                        self.units[target_idx].hp -= magic_dmg;
+                        let total_dmg = actual_dmg + magic_dmg;
                         // Post-hit effects (lifesteal, essence shift)
                         if i < target_idx {
                             let (first, second) = self.units.split_at_mut(target_idx);
-                            post_attack_effects(&mut first[i], &mut second[0], actual_dmg, atk_result.lifesteal_pct, self.tick);
+                            post_attack_effects(&mut first[i], &mut second[0], total_dmg, atk_result.lifesteal_pct, self.tick);
                         } else {
                             let (first, second) = self.units.split_at_mut(i);
-                            post_attack_effects(&mut second[0], &mut first[target_idx], actual_dmg, atk_result.lifesteal_pct, self.tick);
+                            post_attack_effects(&mut second[0], &mut first[target_idx], total_dmg, atk_result.lifesteal_pct, self.tick);
+                        }
+                        // Glaives bounce: find nearest enemy to target within bounce_radius
+                        if atk_result.glaives_active {
+                            self.apply_glaives_bounce(i, target_idx, atk_result.bonus_magical_damage);
                         }
                         // Fury Swipes Gaben: spread stacks to other enemies
                         let other_enemies: Vec<u32> = self.units.iter()
@@ -473,7 +483,7 @@ impl Simulation {
                             .collect();
                         fury_swipes_gaben_spread(&mut self.units[i], target_id, &other_enemies, self.tick);
                         events.push(CombatEvent::Attack {
-                            tick: self.tick, attacker_id, target_id, damage: actual_dmg,
+                            tick: self.tick, attacker_id, target_id, damage: total_dmg,
                         });
                     } else {
                         // For ranged: store modified damage in projectile, post-hit on impact
@@ -481,7 +491,9 @@ impl Simulation {
                             target_id,
                             attacker_id,
                             damage: modified_dmg,
+                            bonus_magical_damage: atk_result.bonus_magical_damage,
                             lifesteal_pct: atk_result.lifesteal_pct,
+                            glaives_active: atk_result.glaives_active,
                             position: attacker_pos,
                             speed: proj_speed,
                         };
@@ -568,6 +580,7 @@ impl Simulation {
     fn step_projectiles(&mut self) {
         let mut hit_events: Vec<CombatEvent> = Vec::new();
         let mut to_remove: Vec<usize> = Vec::new();
+        let mut bounces: Vec<(usize, usize, f32)> = Vec::new(); // (attacker_idx, target_idx, bonus_magical_damage)
 
         for (pi, proj) in self.projectiles.iter_mut().enumerate() {
             // Find target
@@ -589,23 +602,34 @@ impl Simulation {
                 let blocked = if target_is_melee && self.rng.chance(0.5) { 16.0_f32.min(proj.damage) } else { 0.0 };
                 let actual_dmg = apply_armor(proj.damage - blocked, armor);
                 self.units[target_idx].hp -= actual_dmg;
+                // Glaives bonus magical damage
+                let magic_dmg = if proj.bonus_magical_damage > 0.0 {
+                    combat::apply_magic_resistance(proj.bonus_magical_damage, self.units[target_idx].magic_resistance)
+                } else { 0.0 };
+                self.units[target_idx].hp -= magic_dmg;
+                let total_dmg = actual_dmg + magic_dmg;
                 // Post-hit effects for ranged attacks
                 let attacker_id = proj.attacker_id;
                 let lifesteal_pct = proj.lifesteal_pct;
+                let glaives_active = proj.glaives_active;
+                let bonus_magical_damage = proj.bonus_magical_damage;
                 if let Some(attacker_idx) = self.units.iter().position(|u| u.id == attacker_id)
                     && attacker_idx != target_idx
                 {
                     let tick = self.tick;
                     if attacker_idx < target_idx {
                         let (first, second) = self.units.split_at_mut(target_idx);
-                        post_attack_effects(&mut first[attacker_idx], &mut second[0], actual_dmg, lifesteal_pct, tick);
+                        post_attack_effects(&mut first[attacker_idx], &mut second[0], total_dmg, lifesteal_pct, tick);
                     } else {
                         let (first, second) = self.units.split_at_mut(attacker_idx);
-                        post_attack_effects(&mut second[0], &mut first[target_idx], actual_dmg, lifesteal_pct, tick);
+                        post_attack_effects(&mut second[0], &mut first[target_idx], total_dmg, lifesteal_pct, tick);
+                    }
+                    if glaives_active {
+                        bounces.push((attacker_idx, target_idx, bonus_magical_damage));
                     }
                 }
                 hit_events.push(CombatEvent::ProjectileHit {
-                    tick: self.tick, target_id: proj.target_id, damage: actual_dmg,
+                    tick: self.tick, target_id: proj.target_id, damage: total_dmg,
                 });
                 to_remove.push(pi);
             } else {
@@ -620,6 +644,10 @@ impl Simulation {
             self.projectiles.swap_remove(idx);
         }
         self.combat_log.extend(hit_events);
+        // Apply deferred bounces
+        for (attacker_idx, target_idx, bonus_magical_damage) in bounces {
+            self.apply_glaives_bounce(attacker_idx, target_idx, bonus_magical_damage);
+        }
     }
 
     fn step_pending_effects(&mut self) {
@@ -786,11 +814,76 @@ impl Simulation {
     }
 
     fn check_deaths(&mut self) {
-        for unit in self.units.iter_mut() {
+        let mut newly_dead: Vec<(usize, u32)> = Vec::new();
+        for (i, unit) in self.units.iter_mut().enumerate() {
             if unit.hp <= 0.0 && unit.state != UnitState::Dead {
                 unit.state = UnitState::Dead;
-                self.combat_log.push(CombatEvent::Death { tick: self.tick, unit_id: unit.id });
+                newly_dead.push((i, unit.id));
             }
+        }
+        for &(_, uid) in &newly_dead {
+            self.combat_log.push(CombatEvent::Death { tick: self.tick, unit_id: uid });
+        }
+        // Glaives INT steal on kill
+        for &(dead_idx, _) in &newly_dead {
+            let dead_pos = self.units[dead_idx].position;
+            let dead_team = self.units[dead_idx].team;
+            // Find killer with Glaives steal
+            let mut killer_idx = None;
+            let mut steal_amount = 0.0_f32;
+            'outer: for ki in 0..self.units.len() {
+                if ki == dead_idx || !self.units[ki].is_alive() || self.units[ki].team == dead_team { continue; }
+                for ability in &self.units[ki].abilities {
+                    if ability.level == 0 { continue; }
+                    for effect in &ability.def.effects {
+                        if let aa2_data::Effect::GlaivesOfWisdom { steal_int_on_kill, steal_radius: sr, .. } = effect {
+                            let s = aa2_data::value_at_level(steal_int_on_kill, ability.level);
+                            if s > 0.0 && self.units[ki].position.distance(dead_pos) <= *sr {
+                                killer_idx = Some(ki);
+                                steal_amount = s;
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(ki) = killer_idx {
+                let actual_steal = steal_amount.min(self.units[dead_idx].base_int - 1.0).max(0.0);
+                self.units[dead_idx].base_int -= actual_steal;
+                self.units[ki].base_int += steal_amount;
+            }
+        }
+    }
+
+    /// Apply Glaives bounce: deal bonus magical damage to nearest enemy within bounce_radius of target.
+    fn apply_glaives_bounce(&mut self, attacker_idx: usize, target_idx: usize, bonus_magical_damage: f32) {
+        if bonus_magical_damage <= 0.0 { return; }
+        // Find bounce_radius from attacker's Glaives ability
+        let mut bounce_radius = 0.0_f32;
+        for ability in &self.units[attacker_idx].abilities {
+            if ability.level == 0 { continue; }
+            for effect in &ability.def.effects {
+                if let aa2_data::Effect::GlaivesOfWisdom { bounce_radius: br, .. } = effect {
+                    bounce_radius = aa2_data::value_at_level(br, ability.level);
+                }
+            }
+        }
+        if bounce_radius <= 0.0 { return; }
+        // Find nearest enemy to target within bounce_radius
+        let target_pos = self.units[target_idx].position;
+        let attacker_team = self.units[attacker_idx].team;
+        let target_id = self.units[target_idx].id;
+        let mut best: Option<(usize, f32)> = None;
+        for (ui, u) in self.units.iter().enumerate() {
+            if u.id == target_id || u.team == attacker_team || !u.is_alive() { continue; }
+            let d = target_pos.distance(u.position);
+            if d <= bounce_radius && (best.is_none() || d < best.unwrap().1) {
+                best = Some((ui, d));
+            }
+        }
+        if let Some((bounce_idx, _)) = best {
+            let dmg = combat::apply_magic_resistance(bonus_magical_damage, self.units[bounce_idx].magic_resistance);
+            self.units[bounce_idx].hp -= dmg;
         }
     }
 

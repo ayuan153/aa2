@@ -105,6 +105,12 @@ pub struct Unit {
     pub prd_states: Vec<(usize, PrdState)>,
     /// Per-target attack modifier state (Fury Swipes stacks, etc.).
     pub attack_modifier_state: Vec<(u32, TargetModifierState)>,
+    /// Base STR (from HeroDef, only changes via permanent steal).
+    pub base_str: f32,
+    /// Base AGI (from HeroDef, only changes via permanent steal).
+    pub base_agi: f32,
+    /// Base INT (from HeroDef, only changes via permanent steal).
+    pub base_int: f32,
 }
 
 /// Derived combat stats from attributes.
@@ -141,6 +147,11 @@ pub fn derive_stats(str_val: f32, agi_val: f32, int_val: f32, primary: &Attribut
 /// Compute attack interval from BAT and total attack speed.
 pub fn compute_attack_interval(bat: f32, total_attack_speed: f32) -> f32 {
     bat / (total_attack_speed / 100.0)
+}
+
+/// Compute effective stat value, flooring at 1 (stats can't go below 1).
+pub fn effective_stat(base: f32, bonus: f32) -> f32 {
+    (base + bonus).max(1.0)
 }
 
 /// Compute effective attack point (frontswing) from base attack point and total attack speed.
@@ -190,6 +201,9 @@ impl Unit {
             cast_state: None,
             prd_states: Vec::new(),
             attack_modifier_state: Vec::new(),
+            base_str: def.base_str,
+            base_agi: def.base_agi,
+            base_int: def.base_int,
         }
     }
 

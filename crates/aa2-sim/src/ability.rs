@@ -111,6 +111,9 @@ pub fn execute_ability(
                 Effect::FurySwipes { .. } | Effect::ChaosStrike { .. } | Effect::EssenceShift { .. } => {
                     // Attack modifiers are handled in the attack pipeline, not ability execution
                 }
+                Effect::GlaivesOfWisdom { .. } => {
+                    // Attack modifier — handled in the attack pipeline
+                }
             }
         }
     }
