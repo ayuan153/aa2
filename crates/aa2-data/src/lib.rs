@@ -67,6 +67,27 @@ pub enum Effect {
         radius: Vec<f32>,
         wave_speed: f32,
     },
+    /// Fury Swipes: per-target stacking flat damage, added post-crit.
+    FurySwipes {
+        damage_per_stack: Vec<f32>,
+        stack_duration: Vec<f32>,
+        armor_reduction_per_stack: Vec<f32>,
+    },
+    /// Chaos Strike: PRD-based crit with lifesteal.
+    ChaosStrike {
+        proc_chance: Vec<f32>,
+        crit_min: Vec<f32>,
+        crit_max: Vec<f32>,
+        lifesteal: Vec<f32>,
+    },
+    /// Essence Shift: steal stats on attack.
+    EssenceShift {
+        str_steal: Vec<f32>,
+        agi_steal: Vec<f32>,
+        int_steal: Vec<f32>,
+        agi_gain: Vec<f32>,
+        duration: Vec<f32>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

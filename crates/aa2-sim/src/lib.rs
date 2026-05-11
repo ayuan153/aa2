@@ -13,6 +13,7 @@ pub mod ability;
 pub mod aoe;
 pub mod ai;
 pub mod pending;
+pub mod attack_modifier;
 
 use vec2::Vec2;
 use unit::{Unit, UnitState, ACQUISITION_RANGE, ACTION_THRESHOLD};
@@ -21,6 +22,7 @@ use projectile::Projectile;
 use combat::apply_armor;
 use buff::{tick_buffs, active_status};
 use cast::{tick_cooldowns, tick_cast, CastTickResult};
+use attack_modifier::{process_attack_modifiers, post_attack_effects, find_ally_chaos_strike_aura};
 
 /// Simulation tick rate (ticks per second).
 pub const TICK_RATE: f32 = 30.0;
@@ -65,12 +67,12 @@ pub enum CombatEvent {
 /// We own this implementation to guarantee identical output across all platforms
 /// and Rust versions (no external crate can change the algorithm under us).
 #[derive(Debug, Clone)]
-struct Rng {
+pub(crate) struct Rng {
     s: [u32; 4],
 }
 
 impl Rng {
-    fn new(seed: u32) -> Self {
+    pub(crate) fn new(seed: u32) -> Self {
         // SplitMix32 to expand a single seed into 4 state words
         let mut z = seed;
         let mut s = [0u32; 4];
@@ -86,7 +88,7 @@ impl Rng {
     }
 
     /// Returns a random u32 using xoshiro128++.
-    fn next_u32(&mut self) -> u32 {
+    pub(crate) fn next_u32(&mut self) -> u32 {
         let result = (self.s[0].wrapping_add(self.s[3]))
             .rotate_left(7)
             .wrapping_add(self.s[0]);
@@ -101,14 +103,14 @@ impl Rng {
     }
 
     /// Returns a uniform random f32 in [min, max].
-    fn range_f32(&mut self, min: f32, max: f32) -> f32 {
+    pub(crate) fn range_f32(&mut self, min: f32, max: f32) -> f32 {
         if min >= max { return min; }
         let t = (self.next_u32() >> 8) as f32 / (1u32 << 24) as f32; // 24-bit precision
         min + (max - min) * t
     }
 
     /// Returns true with the given probability [0.0, 1.0].
-    fn chance(&mut self, probability: f32) -> bool {
+    pub(crate) fn chance(&mut self, probability: f32) -> bool {
         let t = (self.next_u32() >> 8) as f32 / (1u32 << 24) as f32;
         t < probability
     }
@@ -364,8 +366,8 @@ impl Simulation {
                 let needs_facing = !matches!(targeting, aa2_data::TargetType::NoTarget);
 
                 // Check if we need to walk into cast range (for targeted abilities)
-                if needs_facing {
-                    if let Some(tpos) = target_pos {
+                if needs_facing
+                    && let Some(tpos) = target_pos {
                         let dist = self.units[i].position.distance(tpos);
                         if dist > cast_range && cast_range > 0.0 {
                             // Walk toward target until in cast range
@@ -385,7 +387,6 @@ impl Simulation {
                             continue;
                         }
                     }
-                }
 
                 // In range and facing (or NoTarget) — begin cast
                 let cast_time = self.units[i].abilities[ability_index].def.cast_point;
@@ -440,22 +441,40 @@ impl Simulation {
                     let proj_speed = self.units[i].projectile_speed.unwrap_or(900.0);
                     let attacker_pos = self.units[i].position;
                     let target_is_melee = self.units[target_idx].is_melee;
-                    let armor = self.units[target_idx].armor;
 
+                    // Process attack modifiers (crit, fury swipes)
+                    let ally_aura = find_ally_chaos_strike_aura(&self.units[i], &self.units);
+                    let atk_result = process_attack_modifiers(
+                        &mut self.units[i], target_id, raw_dmg, self.tick, &mut self.rng, ally_aura,
+                    );
+                    let modified_dmg = atk_result.damage;
+
+                    let armor = self.units[target_idx].armor;
                     // Damage block (innate melee: 50% chance to block 16)
-                    let blocked = if target_is_melee && self.rng.chance(0.5) { 16.0_f32.min(raw_dmg) } else { 0.0 };
-                    let after_block = raw_dmg - blocked;
+                    let blocked = if target_is_melee && self.rng.chance(0.5) { 16.0_f32.min(modified_dmg) } else { 0.0 };
+                    let after_block = modified_dmg - blocked;
                     let actual_dmg = apply_armor(after_block, armor);
 
                     if is_melee {
                         self.units[target_idx].hp -= actual_dmg;
+                        // Post-hit effects (lifesteal, essence shift)
+                        if i < target_idx {
+                            let (first, second) = self.units.split_at_mut(target_idx);
+                            post_attack_effects(&mut first[i], &mut second[0], actual_dmg, atk_result.lifesteal_pct, self.tick);
+                        } else {
+                            let (first, second) = self.units.split_at_mut(i);
+                            post_attack_effects(&mut second[0], &mut first[target_idx], actual_dmg, atk_result.lifesteal_pct, self.tick);
+                        }
                         events.push(CombatEvent::Attack {
                             tick: self.tick, attacker_id, target_id, damage: actual_dmg,
                         });
                     } else {
+                        // For ranged: store modified damage in projectile, post-hit on impact
                         let proj = Projectile {
                             target_id,
-                            damage: raw_dmg, // Store raw damage; block + armor applied on hit
+                            attacker_id,
+                            damage: modified_dmg,
+                            lifesteal_pct: atk_result.lifesteal_pct,
                             position: attacker_pos,
                             speed: proj_speed,
                         };
@@ -563,6 +582,21 @@ impl Simulation {
                 let blocked = if target_is_melee && self.rng.chance(0.5) { 16.0_f32.min(proj.damage) } else { 0.0 };
                 let actual_dmg = apply_armor(proj.damage - blocked, armor);
                 self.units[target_idx].hp -= actual_dmg;
+                // Post-hit effects for ranged attacks
+                let attacker_id = proj.attacker_id;
+                let lifesteal_pct = proj.lifesteal_pct;
+                if let Some(attacker_idx) = self.units.iter().position(|u| u.id == attacker_id)
+                    && attacker_idx != target_idx
+                {
+                    let tick = self.tick;
+                    if attacker_idx < target_idx {
+                        let (first, second) = self.units.split_at_mut(target_idx);
+                        post_attack_effects(&mut first[attacker_idx], &mut second[0], actual_dmg, lifesteal_pct, tick);
+                    } else {
+                        let (first, second) = self.units.split_at_mut(attacker_idx);
+                        post_attack_effects(&mut second[0], &mut first[target_idx], actual_dmg, lifesteal_pct, tick);
+                    }
+                }
                 hit_events.push(CombatEvent::ProjectileHit {
                     tick: self.tick, target_id: proj.target_id, damage: actual_dmg,
                 });

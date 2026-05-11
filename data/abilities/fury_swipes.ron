@@ -1,0 +1,27 @@
+// Fury Swipes - Ursa's signature per-target stacking damage
+// Each attack on the same target adds a stack. Stacks increase damage on subsequent attacks.
+// Damage is added POST-CRIT (does not get multiplied by crits).
+//
+// AA Scaling: L1=12, L2=20, L3=36 dmg/stack. L4-5=36. L6(Super)=36+1.5 armor red/stack. L7-8=same. L9(Gaben)=spread
+// Super: Reduces enemy armor by 1.5 per stack
+// Gaben: Every 2 attacks on an enemy applies 1 stack to all other enemies
+AbilityDef(
+    name: "Fury Swipes",
+    cooldown: 0.0,
+    mana_cost: [0.0],
+    cast_point: 0.0,
+    targeting: Passive,
+    effects: [
+        FurySwipes(
+            // Damage per stack: L1=12, L2=20, L3=36, L4-5=36, L6-8=36, L9=36
+            damage_per_stack: [12.0, 20.0, 36.0, 36.0, 36.0, 36.0, 36.0, 36.0, 36.0],
+            // Stack duration (seconds): L1=8, L2=12, L3=20, L4-5=20, L6-8=20, L9=20
+            stack_duration: [8.0, 12.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0],
+            // Armor reduction per stack: 0 at base, 1.5 at Super+
+            armor_reduction_per_stack: [0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 1.5, 1.5],
+        ),
+    ],
+    description: "Each attack on the same target deals increasing bonus damage.",
+    aoe_shape: None,
+    cast_range: 0.0,
+)

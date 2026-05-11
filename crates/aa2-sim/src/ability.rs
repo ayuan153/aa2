@@ -108,6 +108,9 @@ pub fn execute_ability(
                 Effect::DarkPact { .. } | Effect::BuffTargetAndSelf { .. } | Effect::ExpandingWaveStun { .. } => {
                     // These are handled outside the per-target loop
                 }
+                Effect::FurySwipes { .. } | Effect::ChaosStrike { .. } | Effect::EssenceShift { .. } => {
+                    // Attack modifiers are handled in the attack pipeline, not ability execution
+                }
             }
         }
     }

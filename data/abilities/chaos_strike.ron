@@ -1,0 +1,28 @@
+// Chaos Strike - Chaos Knight's PRD-based crit with lifesteal
+// Each attack has a chance (PRD) to critically strike for bonus damage and lifesteal.
+//
+// AA Scaling: L1=120-150%/30%, L2=120-190%/40%, L3=120-270%/60%. L4-5=same as L3.
+// Super (L6): +10% proc chance (43.33%), +20% lifesteal (80%)
+// Gaben (L9): Becomes 1200-radius aura. Allies get 50% of holder's proc chance.
+AbilityDef(
+    name: "Chaos Strike",
+    cooldown: 0.0,
+    mana_cost: [0.0],
+    cast_point: 0.0,
+    targeting: Passive,
+    effects: [
+        ChaosStrike(
+            // Proc chance: 33.33% base, 43.33% Super+
+            proc_chance: [33.33, 33.33, 33.33, 33.33, 33.33, 43.33, 43.33, 43.33, 43.33],
+            // Min crit multiplier %
+            crit_min: [120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0],
+            // Max crit multiplier %: scales with level
+            crit_max: [150.0, 190.0, 270.0, 270.0, 270.0, 270.0, 270.0, 270.0, 270.0],
+            // Lifesteal on crit %: L1=30, L2=40, L3=60, Super=80
+            lifesteal: [30.0, 40.0, 60.0, 60.0, 60.0, 80.0, 80.0, 80.0, 80.0],
+        ),
+    ],
+    description: "Attacks have a chance to critically strike, dealing bonus damage and healing.",
+    aoe_shape: None,
+    cast_range: 0.0,
+)

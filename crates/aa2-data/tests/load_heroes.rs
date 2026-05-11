@@ -31,3 +31,21 @@ fn load_dark_pact() {
     assert_eq!(ability.cast_point, 0.0);
     assert_eq!(ability.effects.len(), 1);
 }
+
+#[test]
+fn load_fury_swipes() {
+    let ability = aa2_data::load_ability_def(Path::new("../../data/abilities/fury_swipes.ron")).unwrap();
+    assert_eq!(ability.name, "Fury Swipes");
+}
+
+#[test]
+fn load_chaos_strike() {
+    let ability = aa2_data::load_ability_def(Path::new("../../data/abilities/chaos_strike.ron")).unwrap();
+    assert_eq!(ability.name, "Chaos Strike");
+}
+
+#[test]
+fn load_essence_shift() {
+    let ability = aa2_data::load_ability_def(Path::new("../../data/abilities/essence_shift.ron")).unwrap();
+    assert_eq!(ability.name, "Essence Shift");
+}

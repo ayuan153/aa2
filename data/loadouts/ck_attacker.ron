@@ -1,0 +1,7 @@
+Loadout(
+    hero: "chaos_knight",
+    abilities: [
+        ("fury_swipes", 3),
+        ("chaos_strike", 3),
+    ],
+)

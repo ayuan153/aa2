@@ -2,6 +2,7 @@ use aa2_data::{Attribute, HeroDef, UnitConfig};
 use crate::vec2::Vec2;
 use crate::buff::Buff;
 use crate::cast::{AbilityState, CastInProgress};
+use crate::attack_modifier::{PrdState, TargetModifierState};
 
 /// Base HP added to all units before attribute scaling.
 pub const BASE_HP: f32 = 120.0;
@@ -100,6 +101,10 @@ pub struct Unit {
     pub abilities: Vec<AbilityState>,
     /// In-progress cast, if any.
     pub cast_state: Option<CastInProgress>,
+    /// PRD states indexed by ability slot.
+    pub prd_states: Vec<(usize, PrdState)>,
+    /// Per-target attack modifier state (Fury Swipes stacks, etc.).
+    pub attack_modifier_state: Vec<(u32, TargetModifierState)>,
 }
 
 /// Derived combat stats from attributes.
@@ -183,6 +188,8 @@ impl Unit {
             status_resistance: 0.0,
             abilities: Vec::new(),
             cast_state: None,
+            prd_states: Vec::new(),
+            attack_modifier_state: Vec::new(),
         }
     }
 

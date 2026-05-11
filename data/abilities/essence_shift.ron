@@ -1,0 +1,30 @@
+// Essence Shift - Slark's stat steal on attack
+// Each attack steals 1 STR/AGI/INT from target and grants 3 AGI to self.
+// Stacks independently (each attack = new stack with its own timer).
+//
+// AA difference: Does NOT give permanent AGI until Super upgrade.
+// AA Scaling: L1=5s, L2=10s, L3=20s duration. L4-5=20s.
+// Super (L6): Permanently gain +1 AGI when affected unit dies within 300 radius.
+// Gaben (L9): Duration 90s. Buff persists between rounds.
+AbilityDef(
+    name: "Essence Shift",
+    cooldown: 0.0,
+    mana_cost: [0.0],
+    cast_point: 0.0,
+    targeting: Passive,
+    effects: [
+        EssenceShift(
+            // Stats stolen per attack (always 1 each)
+            str_steal: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            agi_steal: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            int_steal: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            // AGI gained by attacker per attack (always 3)
+            agi_gain: [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0],
+            // Duration: L1=5s, L2=10s, L3=20s, L4-5=20s, L6-8=20s, L9(Gaben)=90s
+            duration: [5.0, 10.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 90.0],
+        ),
+    ],
+    description: "Each attack steals attributes from the target, gaining agility.",
+    aoe_shape: None,
+    cast_range: 0.0,
+)
