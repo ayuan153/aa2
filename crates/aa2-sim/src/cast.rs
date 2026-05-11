@@ -84,7 +84,7 @@ mod tests {
     fn make_test_ability(cast_point: f32, cooldown: f32, mana_cost: f32) -> AbilityDef {
         AbilityDef {
             name: "TestAbility".to_string(),
-            cooldown,
+            cooldown: vec![cooldown],
             mana_cost: vec![mana_cost],
             cast_point,
             targeting: TargetType::NoTarget,

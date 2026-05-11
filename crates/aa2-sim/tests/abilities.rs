@@ -40,7 +40,7 @@ fn make_hero() -> HeroDef {
 fn dark_pact_ability() -> AbilityDef {
     AbilityDef {
         name: "Dark Pact".to_string(),
-        cooldown: 10.0,
+        cooldown: vec![10.0],
         mana_cost: vec![50.0],
         cast_point: 0.0,
         targeting: TargetType::NoTarget,
@@ -64,7 +64,7 @@ fn dark_pact_ability() -> AbilityDef {
 fn heavenly_grace_ability() -> AbilityDef {
     AbilityDef {
         name: "Heavenly Grace".to_string(),
-        cooldown: 10.0,
+        cooldown: vec![10.0],
         mana_cost: vec![50.0],
         cast_point: 0.0,
         targeting: TargetType::SingleAlly,
@@ -86,7 +86,7 @@ fn heavenly_grace_ability() -> AbilityDef {
 fn ravage_ability() -> AbilityDef {
     AbilityDef {
         name: "Ravage".to_string(),
-        cooldown: 150.0,
+        cooldown: vec![150.0],
         mana_cost: vec![150.0],
         cast_point: 0.0,
         targeting: TargetType::NoTarget,
@@ -533,7 +533,7 @@ fn test_hg_dispels_on_cast() {
     let mut units = vec![u0, u1];
     let ability = AbilityDef {
         name: "Heavenly Grace".to_string(),
-        cooldown: 10.0,
+        cooldown: vec![10.0],
         mana_cost: vec![50.0],
         cast_point: 0.0,
         targeting: TargetType::SingleAlly,
@@ -576,7 +576,7 @@ fn test_hg_targets_highest_y_ally() {
     u0.abilities.push(AbilityState {
         def: AbilityDef {
             name: "Heavenly Grace".to_string(),
-            cooldown: 10.0,
+            cooldown: vec![10.0],
             mana_cost: vec![50.0],
             cast_point: 0.0,
             targeting: TargetType::SingleAllyHG,
@@ -614,7 +614,7 @@ fn test_hg_self_cast_when_no_allies() {
     u0.abilities.push(AbilityState {
         def: AbilityDef {
             name: "Heavenly Grace".to_string(),
-            cooldown: 10.0,
+            cooldown: vec![10.0],
             mana_cost: vec![50.0],
             cast_point: 0.0,
             targeting: TargetType::SingleAllyHG,
@@ -650,7 +650,7 @@ fn test_hg_targets_furthest_on_subsequent_cast() {
     u0.abilities.push(AbilityState {
         def: AbilityDef {
             name: "Heavenly Grace".to_string(),
-            cooldown: 10.0,
+            cooldown: vec![10.0],
             mana_cost: vec![50.0],
             cast_point: 0.0,
             targeting: TargetType::SingleAllyHG,

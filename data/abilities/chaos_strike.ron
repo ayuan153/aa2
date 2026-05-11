@@ -6,7 +6,7 @@
 // Gaben (L9): Becomes 1200-radius aura. Allies get 50% of holder's proc chance.
 AbilityDef(
     name: "Chaos Strike",
-    cooldown: 0.0,
+    cooldown: [0.0],
     mana_cost: [0.0],
     cast_point: 0.0,
     targeting: Passive,

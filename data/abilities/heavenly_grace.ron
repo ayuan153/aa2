@@ -7,7 +7,7 @@
 // Gaben (9): +50 STR bonus, undispellable
 AbilityDef(
     name: "Heavenly Grace",
-    cooldown: 14.0,  // base cooldown at max normal level
+    cooldown: [26.0, 22.0, 14.0, 14.0, 14.0, 12.0, 12.0, 12.0, 12.0],  // base cooldown at max normal level
     mana_cost: [80.0, 90.0, 100.0, 100.0, 100.0, 110.0, 110.0, 110.0, 120.0],
     cast_point: 0.25,
     targeting: SingleAllyHG,

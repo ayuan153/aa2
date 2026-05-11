@@ -251,7 +251,7 @@ mod tests {
     fn make_ability(effects: Vec<Effect>) -> AbilityDef {
         AbilityDef {
             name: "TestAbility".to_string(),
-            cooldown: 10.0,
+            cooldown: vec![10.0],
             mana_cost: vec![100.0],
             cast_point: 0.3,
             targeting: TargetType::SingleEnemy,

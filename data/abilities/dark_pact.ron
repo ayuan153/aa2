@@ -11,7 +11,7 @@
 AbilityDef(
     name: "Dark Pact",
     // Cooldown: 9/8/6 base, Super -1s = 5, Gaben stays 5
-    cooldown: 9.0,  // base cooldown (level-specific CDs would need array - using base for now)
+    cooldown: [9.0, 8.0, 6.0, 6.0, 6.0, 5.0, 5.0, 5.0, 5.0],  // base cooldown (level-specific CDs would need array - using base for now)
     mana_cost: [65.0],
     cast_point: 0.0,  // Instant cast - no animation
     targeting: NoTarget,

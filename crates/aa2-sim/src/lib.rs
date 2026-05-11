@@ -310,7 +310,8 @@ impl Simulation {
             match result {
                 CastTickResult::Completed { ability_index, mana_cost } => {
                     self.units[i].mana -= mana_cost;
-                    self.units[i].abilities[ability_index].cooldown_remaining = self.units[i].abilities[ability_index].def.cooldown;
+                    let level = self.units[i].abilities[ability_index].level;
+                    self.units[i].abilities[ability_index].cooldown_remaining = aa2_data::value_at_level(&self.units[i].abilities[ability_index].def.cooldown, level);
                     self.units[i].abilities[ability_index].casts += 1;
                     let ability_def = self.units[i].abilities[ability_index].def.clone();
                     let level = self.units[i].abilities[ability_index].level;
@@ -1091,7 +1092,7 @@ mod tests {
         u0.abilities.push(AbilityState {
             def: AbilityDef {
                 name: "Fireball".to_string(),
-                cooldown: 10.0,
+                cooldown: vec![10.0],
                 mana_cost: vec![50.0],
                 cast_point: 0.3,
                 targeting: TargetType::SingleEnemy,
@@ -1125,7 +1126,7 @@ mod tests {
         u0.abilities.push(AbilityState {
             def: AbilityDef {
                 name: "Smash".to_string(),
-                cooldown: 10.0,
+                cooldown: vec![10.0],
                 mana_cost: vec![50.0],
                 cast_point: 0.3,
                 targeting: TargetType::SingleEnemy,
@@ -1162,7 +1163,7 @@ mod tests {
         u0.abilities.push(AbilityState {
             def: AbilityDef {
                 name: "Fireball".to_string(),
-                cooldown: 10.0,
+                cooldown: vec![10.0],
                 mana_cost: vec![50.0],
                 cast_point: 0.3,
                 targeting: TargetType::SingleEnemy,
@@ -1200,7 +1201,7 @@ mod tests {
         u0.abilities.push(AbilityState {
             def: AbilityDef {
                 name: "Fireball".to_string(),
-                cooldown: 10.0,
+                cooldown: vec![10.0],
                 mana_cost: vec![50.0],
                 cast_point: 0.3,
                 targeting: TargetType::SingleEnemy,
@@ -1243,7 +1244,7 @@ mod tests {
         let hero = make_warrior();
         let ability1 = AbilityDef {
             name: "Fireball".to_string(),
-            cooldown: 10.0,
+            cooldown: vec![10.0],
             mana_cost: vec![100.0],
             cast_point: 0.3,
             targeting: TargetType::SingleEnemy,
@@ -1254,7 +1255,7 @@ mod tests {
         };
         let ability2 = AbilityDef {
             name: "War Cry".to_string(),
-            cooldown: 30.0,
+            cooldown: vec![30.0],
             mana_cost: vec![50.0],
             cast_point: 0.2,
             targeting: TargetType::NoTarget,

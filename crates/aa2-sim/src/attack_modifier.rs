@@ -416,7 +416,7 @@ mod tests {
         let ability = AbilityState {
             def: AbilityDef {
                 name: "Fury Swipes".to_string(),
-                cooldown: 0.0,
+                cooldown: vec![0.0],
                 mana_cost: vec![0.0],
                 cast_point: 0.0,
                 targeting: TargetType::Passive,
@@ -468,7 +468,7 @@ mod tests {
         attacker.abilities.push(AbilityState {
             def: AbilityDef {
                 name: "Fury Swipes".to_string(),
-                cooldown: 0.0,
+                cooldown: vec![0.0],
                 mana_cost: vec![0.0],
                 cast_point: 0.0,
                 targeting: TargetType::Passive,
@@ -488,7 +488,7 @@ mod tests {
         attacker.abilities.push(AbilityState {
             def: AbilityDef {
                 name: "Chaos Strike".to_string(),
-                cooldown: 0.0,
+                cooldown: vec![0.0],
                 mana_cost: vec![0.0],
                 cast_point: 0.0,
                 targeting: TargetType::Passive,
@@ -532,7 +532,7 @@ mod tests {
         attacker.abilities.push(AbilityState {
             def: AbilityDef {
                 name: "Chaos Strike".to_string(),
-                cooldown: 0.0,
+                cooldown: vec![0.0],
                 mana_cost: vec![0.0],
                 cast_point: 0.0,
                 targeting: TargetType::Passive,
@@ -574,7 +574,7 @@ mod tests {
         attacker.abilities.push(AbilityState {
             def: AbilityDef {
                 name: "Essence Shift".to_string(),
-                cooldown: 0.0,
+                cooldown: vec![0.0],
                 mana_cost: vec![0.0],
                 cast_point: 0.0,
                 targeting: TargetType::Passive,

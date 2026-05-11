@@ -2,7 +2,7 @@
 // Scales across 9 levels with increasing damage
 AbilityDef(
     name: "Fireball",
-    cooldown: 10.0,
+    cooldown: [10.0],
     mana_cost: [75.0, 95.0, 115.0, 115.0, 115.0, 135.0, 135.0, 135.0, 150.0],
     cast_point: 0.4,       // Cast animation time before effect
     targeting: SingleEnemy,

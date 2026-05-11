@@ -77,7 +77,7 @@ fn test_io_instant_turn_rate_vs_slow_hero() {
     // Create a simple targeted ability
     let ability = AbilityDef {
         name: "Test Bolt".to_string(),
-        cooldown: 30.0,
+        cooldown: vec![30.0],
         mana_cost: vec![50.0],
         cast_point: 0.3,
         targeting: TargetType::SingleEnemy,

@@ -119,7 +119,7 @@ pub struct HeroDef {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AbilityDef {
     pub name: String,
-    pub cooldown: f32,
+    pub cooldown: Vec<f32>,
     pub mana_cost: Vec<f32>,
     pub cast_point: f32,
     pub targeting: TargetType,

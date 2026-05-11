@@ -7,7 +7,7 @@
 // Gaben: Every 2 attacks on an enemy applies 1 stack to all other enemies
 AbilityDef(
     name: "Fury Swipes",
-    cooldown: 0.0,
+    cooldown: [0.0],
     mana_cost: [0.0],
     cast_point: 0.0,
     targeting: Passive,
