@@ -271,6 +271,46 @@ fn get_or_create_prd(prd_states: &mut Vec<(usize, PrdState)>, ability_index: usi
 }
 
 /// Get current Fury Swipes stacks on a target (0 if expired or not found).
+/// Fury Swipes Gaben: every 2 attacks on an enemy, apply 1 stack to all other enemies.
+/// Call after post_attack_effects. Only triggers at level 9 (Gaben).
+pub fn fury_swipes_gaben_spread(
+    attacker: &mut Unit,
+    target_id: u32,
+    other_enemy_ids: &[u32],
+    tick: u32,
+) {
+    // Check if attacker has Gaben Fury Swipes (level 9)
+    let has_gaben_fs = attacker.abilities.iter().any(|a| {
+        a.level >= 9 && a.def.effects.iter().any(|e| matches!(e, Effect::FurySwipes { .. }))
+    });
+    if !has_gaben_fs { return; }
+
+    // Get current stacks on the target (already incremented this attack)
+    let stacks = get_fury_swipes_stacks(&attacker.attack_modifier_state, target_id, tick);
+
+    // Every 2 attacks (check if stack count is even)
+    if stacks > 0 && stacks % 2 == 0 {
+        let dur_ticks = attacker.abilities.iter()
+            .filter_map(|a| {
+                if a.level < 9 { return None; }
+                a.def.effects.iter().find_map(|e| {
+                    if let Effect::FurySwipes { stack_duration, .. } = e {
+                        Some((value_at_level(stack_duration, a.level) * TICK_RATE) as u32)
+                    } else { None }
+                })
+            })
+            .next()
+            .unwrap_or(600);
+
+        let expiry = tick + dur_ticks;
+        for &enemy_id in other_enemy_ids {
+            if enemy_id == target_id { continue; }
+            let existing = get_fury_swipes_stacks(&attacker.attack_modifier_state, enemy_id, tick);
+            set_fury_swipes_stacks(&mut attacker.attack_modifier_state, enemy_id, existing + 1, expiry);
+        }
+    }
+}
+
 fn get_fury_swipes_stacks(state: &[(u32, TargetModifierState)], target_id: u32, tick: u32) -> u32 {
     state.iter()
         .find(|(id, _)| *id == target_id)

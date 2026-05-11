@@ -1270,3 +1270,47 @@ fn test_essence_shift_super_permanent_agi_on_kill() {
         .count();
     assert!(buffs_after > 0, "Attacker should have ES buffs after killing target");
 }
+
+/// Fury Swipes Gaben: every 2 attacks on an enemy, 1 stack spreads to all other enemies.
+#[test]
+fn test_fury_swipes_gaben_spread() {
+    let hero = aa2_data::load_hero_def(Path::new("../../data/heroes/juggernaut.ron")).unwrap();
+    let fs = aa2_data::load_ability_def(Path::new("../../data/abilities/fury_swipes.ron")).unwrap();
+
+    // Attacker with Gaben Fury Swipes (level 9)
+    let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    attacker.abilities.push(AbilityState { def: fs, cooldown_remaining: 0.0, level: 9, casts: 0 });
+
+    // Two enemies close together
+    let enemy_def = aa2_data::load_hero_def(Path::new("../../data/heroes/sven.ron")).unwrap();
+    let enemy_a = Unit::from_hero_def(&enemy_def, 1, 1, Vec2::new(100.0, 0.0));
+    let enemy_b = Unit::from_hero_def(&enemy_def, 2, 1, Vec2::new(120.0, 0.0));
+
+    let mut sim = Simulation::with_seed(vec![attacker, enemy_a, enemy_b], 42);
+
+    // Run until attacker has hit the primary target at least 4 times
+    // (stacks 2 and 4 should trigger spread)
+    for _ in 0..500 {
+        if sim.is_finished() { break; }
+        sim.step();
+    }
+
+    let attacks_on_target = sim.combat_log.iter()
+        .filter(|e| matches!(e, CombatEvent::Attack { attacker_id: 0, .. }))
+        .count();
+    assert!(attacks_on_target >= 4, "Need 4+ attacks, got {}", attacks_on_target);
+
+    // Check that the secondary enemy (id=2) has Fury Swipes stacks
+    // even though it was never directly attacked
+    
+    let secondary_stacks = sim.units[0].attack_modifier_state.iter()
+        .find(|(id, _)| *id == 2)
+        .map(|(_, s)| s.fury_swipes_stacks)
+        .unwrap_or(0);
+
+    assert!(secondary_stacks > 0,
+        "Secondary enemy should have Fury Swipes stacks from Gaben spread, got {}", secondary_stacks);
+    // With 4+ attacks on primary, stacks 2 and 4 trigger spread = 2 stacks on secondary
+    assert!(secondary_stacks >= 1,
+        "Expected at least 1 spread stack, got {}", secondary_stacks);
+}

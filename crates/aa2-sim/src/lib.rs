@@ -22,7 +22,7 @@ use projectile::Projectile;
 use combat::apply_armor;
 use buff::{tick_buffs, active_status};
 use cast::{tick_cooldowns, tick_cast, CastTickResult};
-use attack_modifier::{process_attack_modifiers, post_attack_effects, find_ally_chaos_strike_aura};
+use attack_modifier::{process_attack_modifiers, post_attack_effects, find_ally_chaos_strike_aura, fury_swipes_gaben_spread};
 
 /// Simulation tick rate (ticks per second).
 pub const TICK_RATE: f32 = 30.0;
@@ -465,6 +465,12 @@ impl Simulation {
                             let (first, second) = self.units.split_at_mut(i);
                             post_attack_effects(&mut second[0], &mut first[target_idx], actual_dmg, atk_result.lifesteal_pct, self.tick);
                         }
+                        // Fury Swipes Gaben: spread stacks to other enemies
+                        let other_enemies: Vec<u32> = self.units.iter()
+                            .filter(|u| u.team != self.units[i].team && u.is_alive())
+                            .map(|u| u.id)
+                            .collect();
+                        fury_swipes_gaben_spread(&mut self.units[i], target_id, &other_enemies, self.tick);
                         events.push(CombatEvent::Attack {
                             tick: self.tick, attacker_id, target_id, damage: actual_dmg,
                         });
