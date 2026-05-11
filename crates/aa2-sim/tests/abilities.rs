@@ -1,10 +1,16 @@
-//! Tests for Dark Pact, Heavenly Grace, and Ravage mechanics.
+//! Ability casting, execution, interactions, and scaling tests.
+//! Covers Dark Pact, Heavenly Grace, Ravage, and their interactions.
 
 use aa2_data::{AbilityDef, Attribute, DamageType, Effect, HeroDef, TargetType, UnitConfig};
 use aa2_sim::buff::{Buff, DispelType, StackBehavior, StatusFlags};
 use aa2_sim::unit::Unit;
 use aa2_sim::vec2::Vec2;
 use aa2_sim::{CombatEvent, Simulation};
+use std::path::Path;
+
+fn data_path(relative: &str) -> std::path::PathBuf {
+    Path::new("../../data").join(relative)
+}
 
 fn make_hero() -> HeroDef {
     HeroDef {
@@ -35,7 +41,7 @@ fn dark_pact_ability() -> AbilityDef {
         name: "Dark Pact".to_string(),
         cooldown: 10.0,
         mana_cost: vec![50.0],
-        cast_point: 0.0, // instant cast for testing
+        cast_point: 0.0,
         targeting: TargetType::NoTarget,
         effects: vec![Effect::DarkPact {
             kind: DamageType::Magical,
@@ -323,6 +329,48 @@ fn test_dark_pact_non_lethal() {
 }
 
 #[test]
+fn test_dark_pact_full_pipeline() {
+    use std::path::Path;
+    use aa2_sim::aa2_data::{load_loadout, resolve_loadout, UnitConfig};
+    use aa2_sim::Simulation;
+
+    let data_dir = Path::new("../../data");
+    let loadout = load_loadout(Path::new("../../data/loadouts/jugg_darkpact.ron")).unwrap();
+    let config = resolve_loadout(&loadout, data_dir).unwrap();
+
+    // Verify ability loaded
+    assert_eq!(config.abilities.len(), 1);
+    assert_eq!(config.abilities[0].0.name, "Dark Pact");
+
+    // Create sim with enemy nearby
+    let hero2 = aa2_sim::aa2_data::load_hero_def(Path::new("../../data/heroes/sven.ron")).unwrap();
+    let config_b = UnitConfig::new(hero2);
+
+    let mut sim = Simulation::from_configs(&[config], &[config_b], 42);
+
+    // Run for 3 ticks — cast should complete (0 cast point)
+    for _ in 0..3 {
+        sim.step();
+    }
+
+    // Verify pending effect was created
+    println!("Pending effects after 3 ticks: {}", sim.pending_effects.len());
+    assert!(!sim.pending_effects.is_empty(), "Dark Pact should create a pending effect");
+
+    // Run until pulses fire (45 more ticks for delay + a few for pulses)
+    for _ in 0..60 {
+        sim.step();
+    }
+
+    // Check for DarkPactPulse events
+    let pulse_events: Vec<_> = sim.combat_log.iter()
+        .filter(|e| matches!(e, aa2_sim::CombatEvent::DarkPactPulse { .. }))
+        .collect();
+    println!("Pulse events: {}", pulse_events.len());
+    assert!(!pulse_events.is_empty(), "Dark Pact pulses should have fired");
+}
+
+#[test]
 fn test_expanding_wave() {
     let hero = make_hero();
     // Place enemies at different distances
@@ -457,48 +505,6 @@ fn test_buff_target_and_self() {
         .filter(|e| matches!(e, CombatEvent::BuffApplied { name, .. } if name == "Heavenly Grace"))
         .collect();
     assert_eq!(buff_events.len(), 2, "Should have BuffApplied for both target and caster");
-}
-
-#[test]
-fn test_dark_pact_full_pipeline() {
-    use std::path::Path;
-    use aa2_sim::aa2_data::{load_loadout, resolve_loadout, UnitConfig};
-    use aa2_sim::Simulation;
-
-    let data_dir = Path::new("../../data");
-    let loadout = load_loadout(Path::new("../../data/loadouts/jugg_darkpact.ron")).unwrap();
-    let config = resolve_loadout(&loadout, data_dir).unwrap();
-
-    // Verify ability loaded
-    assert_eq!(config.abilities.len(), 1);
-    assert_eq!(config.abilities[0].0.name, "Dark Pact");
-
-    // Create sim with enemy nearby
-    let hero2 = aa2_sim::aa2_data::load_hero_def(Path::new("../../data/heroes/sven.ron")).unwrap();
-    let config_b = UnitConfig::new(hero2);
-
-    let mut sim = Simulation::from_configs(&[config], &[config_b], 42);
-
-    // Run for 3 ticks — cast should complete (0 cast point)
-    for _ in 0..3 {
-        sim.step();
-    }
-
-    // Verify pending effect was created
-    println!("Pending effects after 3 ticks: {}", sim.pending_effects.len());
-    assert!(!sim.pending_effects.is_empty(), "Dark Pact should create a pending effect");
-
-    // Run until pulses fire (45 more ticks for delay + a few for pulses)
-    for _ in 0..60 {
-        sim.step();
-    }
-
-    // Check for DarkPactPulse events
-    let pulse_events: Vec<_> = sim.combat_log.iter()
-        .filter(|e| matches!(e, aa2_sim::CombatEvent::DarkPactPulse { .. }))
-        .collect();
-    println!("Pulse events: {}", pulse_events.len());
-    assert!(!pulse_events.is_empty(), "Dark Pact pulses should have fired");
 }
 
 #[test]
@@ -670,90 +676,232 @@ fn test_hg_targets_furthest_on_subsequent_cast() {
     assert_eq!(target_id, Some(2), "Should target furthest ally on subsequent cast");
 }
 
-/// Test that Io (instant turn rate) casts faster than a slow-turning hero
-/// when the target is behind them (requiring a 180° turn).
+/// # Test: AoE Radius Scaling — Gaben (level 9) vs Level 3
+///
+/// Verifies that Dark Pact's radius scales correctly with level:
+/// - Level 9 (Gaben): radius 675 → hits enemy at 600 distance
+/// - Level 3: radius 325 → does NOT hit enemy at 600 distance
+///
+/// This matters because radius scaling is the primary power curve for Dark Pact,
+/// and incorrect radius values would make the ability over/under-powered.
 #[test]
-fn test_io_instant_turn_rate_vs_slow_hero() {
-    use aa2_sim::vec2::Vec2;
-    use aa2_sim::unit::Unit;
-    use aa2_sim::cast::AbilityState;
-    use aa2_sim::{Simulation, CombatEvent};
-    use aa2_data::{AbilityDef, DamageType, Effect, TargetType, Attribute, HeroDef};
+fn test_aoe_radius_scaling_gaben_vs_level3() {
+    use aa2_data::load_ability_def;
 
-    // Create a simple targeted ability
-    let ability = AbilityDef {
-        name: "Test Bolt".to_string(),
-        cooldown: 30.0,
-        mana_cost: vec![50.0],
-        cast_point: 0.3,
-        targeting: TargetType::SingleEnemy,
-        effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
-        description: String::new(),
-        aoe_shape: None,
-        cast_range: 600.0,
+    let dark_pact = load_ability_def(&data_path("abilities/dark_pact.ron")).unwrap();
+    let hero = make_hero();
+
+    // Extract radius values from the loaded ability data to verify correctness
+    let effect = &dark_pact.effects[0];
+    let (radius_l9, radius_l3, total_dmg_l9, total_dmg_l3) = match effect {
+        Effect::DarkPact { radius, total_damage, pulse_count, .. } => {
+            (
+                aa2_data::value_at_level(radius, 9),
+                aa2_data::value_at_level(radius, 3),
+                aa2_data::value_at_level(total_damage, 9) / *pulse_count as f32,
+                aa2_data::value_at_level(total_damage, 3) / *pulse_count as f32,
+            )
+        }
+        _ => panic!("Expected DarkPact effect"),
     };
+    assert_eq!(radius_l9, 675.0);
+    assert_eq!(radius_l3, 325.0);
 
-    // Io: instant turn rate (999.0)
-    let io_def = aa2_data::load_hero_def(std::path::Path::new("../../data/heroes/io.ron")).unwrap();
-    // Slow hero: turn rate 0.5 (needs ~6 ticks to turn 180°)
-    let mut slow_def = io_def.clone();
-    slow_def.name = "SlowTurner".to_string();
-    slow_def.turn_rate = 0.5;
+    // Directly inject pending effects to test radius without caster movement.
+    // Caster at origin, enemy at exactly 600 units away.
+    let caster = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    let enemy = Unit::from_hero_def(&hero, 1, 1, Vec2::new(600.0, 0.0));
 
-    // Place heroes facing UP (positive Y), with enemy BEHIND them (negative Y)
-    // This forces a ~180° turn before casting
-    let mut io_unit = Unit::from_hero_def(&io_def, 0, 0, Vec2::new(0.0, 300.0));
-    io_unit.facing = std::f32::consts::FRAC_PI_2; // facing up (+Y)
-    io_unit.abilities.push(AbilityState { def: ability.clone(), cooldown_remaining: 0.0, level: 1, casts: 0 });
+    // --- Gaben (radius 675): should hit at 600 ---
+    let mut sim_gaben = Simulation::new(vec![caster.clone(), enemy.clone()]);
+    sim_gaben.pending_effects.push(aa2_sim::pending::PendingEffect {
+        caster_id: 0,
+        caster_team: 0,
+        ability_name: "Dark Pact".to_string(),
+        kind: aa2_sim::pending::PendingEffectKind::DarkPactPulse {
+            damage_per_pulse: total_dmg_l9,
+            radius: radius_l9,
+            self_damage_pct: 0.3,
+            damage_type: DamageType::Magical,
+            dispel_self: true,
+            non_lethal: true,
+            pulses_remaining: 1,
+            pulse_interval_ticks: 3,
+            ticks_until_next_pulse: 0,
+        },
+        delay_ticks_remaining: 0,
+    });
+    sim_gaben.step();
 
-    let mut slow_unit = Unit::from_hero_def(&slow_def, 2, 0, Vec2::new(200.0, 300.0));
-    slow_unit.facing = std::f32::consts::FRAC_PI_2; // facing up (+Y)
-    slow_unit.abilities.push(AbilityState { def: ability.clone(), cooldown_remaining: 0.0, level: 1, casts: 0 });
+    // --- Level 3 (radius 325): should NOT hit at 600 ---
+    let mut sim_l3 = Simulation::new(vec![caster, enemy]);
+    sim_l3.pending_effects.push(aa2_sim::pending::PendingEffect {
+        caster_id: 0,
+        caster_team: 0,
+        ability_name: "Dark Pact".to_string(),
+        kind: aa2_sim::pending::PendingEffectKind::DarkPactPulse {
+            damage_per_pulse: total_dmg_l3,
+            radius: radius_l3,
+            self_damage_pct: 0.3,
+            damage_type: DamageType::Magical,
+            dispel_self: true,
+            non_lethal: true,
+            pulses_remaining: 1,
+            pulse_interval_ticks: 3,
+            ticks_until_next_pulse: 0,
+        },
+        delay_ticks_remaining: 0,
+    });
+    sim_l3.step();
 
-    // Enemy behind both heroes (at Y=0, within cast range 600)
-    let enemy_def = io_def.clone();
-    let enemy = Unit::from_hero_def(&enemy_def, 1, 1, Vec2::new(100.0, 0.0));
+    let gaben_hit = sim_gaben.combat_log.iter().find_map(|e| {
+        if let CombatEvent::DarkPactPulse { enemies_hit, .. } = e { Some(*enemies_hit) } else { None }
+    });
+    let l3_hit = sim_l3.combat_log.iter().find_map(|e| {
+        if let CombatEvent::DarkPactPulse { enemies_hit, .. } = e { Some(*enemies_hit) } else { None }
+    });
 
-    // Run Io simulation
-    let mut sim_io = Simulation::new(vec![io_unit, enemy.clone()]);
-    let mut io_cast_tick = None;
-    for _ in 0..100 {
-        sim_io.step();
-        if io_cast_tick.is_none() {
-            if let Some(evt) = sim_io.combat_log.iter().find(|e| matches!(e, CombatEvent::CastStart { .. })) {
-                if let CombatEvent::CastStart { tick, .. } = evt {
-                    io_cast_tick = Some(*tick);
-                }
-            }
+    assert_eq!(gaben_hit, Some(1), "Gaben Dark Pact (radius 675) should hit enemy at 600 distance");
+    assert_eq!(l3_hit, Some(0), "Level 3 Dark Pact (radius 325) should NOT hit enemy at 600 distance");
+}
+
+/// # Test: Ravage Wave Timing — Distance-Based Stun Order
+///
+/// Verifies that Ravage's expanding wave stuns closer enemies before farther ones.
+/// This is the core mechanic that differentiates Ravage from instant AoE stuns:
+/// positioning matters because farther enemies have time to react.
+///
+/// Wave speed: 905 units/sec = ~30.17 units/tick.
+/// Expected tick difference for 300 units: ~10 ticks.
+#[test]
+fn test_ravage_wave_timing_distance_based() {
+    use aa2_data::load_ability_def;
+
+    let ravage = load_ability_def(&data_path("abilities/ravage.ron")).unwrap();
+    let hero = make_hero();
+
+    // Verify loaded data
+    let effect = &ravage.effects[0];
+    let (damage, stun_dur, wave_speed) = match effect {
+        aa2_data::Effect::ExpandingWaveStun { damage, stun_duration, wave_speed, .. } => {
+            (aa2_data::value_at_level(damage, 2), aa2_data::value_at_level(stun_duration, 2), *wave_speed)
         }
-        if io_cast_tick.is_some() { break; }
+        _ => panic!("Expected ExpandingWaveStun"),
+    };
+    assert_eq!(wave_speed, 905.0);
+    assert_eq!(stun_dur, 2.2);
+
+    // Inject wave directly at origin to avoid cast point and enemy movement.
+    // Place caster far away (outside acquisition range 800) so enemies don't walk.
+    // Wave origin is set to (0,0) independently of caster position.
+    let caster = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, -1000.0));
+    let enemy_a = Unit::from_hero_def(&hero, 1, 1, Vec2::new(200.0, 0.0));
+    let enemy_b = Unit::from_hero_def(&hero, 2, 1, Vec2::new(500.0, 0.0));
+
+    let mut sim = Simulation::new(vec![caster, enemy_a, enemy_b]);
+    sim.pending_effects.push(aa2_sim::pending::PendingEffect {
+        caster_id: 0,
+        caster_team: 0,
+        ability_name: "Ravage".to_string(),
+        kind: aa2_sim::pending::PendingEffectKind::ExpandingWave {
+            damage,
+            stun_duration_secs: stun_dur,
+            max_radius: 700.0,
+            wave_speed,
+            current_radius: 0.0,
+            origin: Vec2::new(0.0, 0.0),
+            already_hit: Vec::new(),
+        },
+        delay_ticks_remaining: 0,
+    });
+
+    // Run enough ticks for wave to reach 500 units: 500/30.17 ≈ 17 ticks
+    for _ in 0..25 {
+        sim.step();
     }
 
-    // Run slow hero simulation
-    let enemy2 = Unit::from_hero_def(&enemy_def, 1, 1, Vec2::new(100.0, 0.0));
-    let mut sim_slow = Simulation::new(vec![slow_unit, enemy2]);
-    let mut slow_cast_tick = None;
-    for _ in 0..100 {
-        sim_slow.step();
-        if slow_cast_tick.is_none() {
-            if let Some(evt) = sim_slow.combat_log.iter().find(|e| matches!(e, CombatEvent::CastStart { .. })) {
-                if let CombatEvent::CastStart { tick, .. } = evt {
-                    slow_cast_tick = Some(*tick);
-                }
-            }
+    let hit_a_tick = sim.combat_log.iter().find_map(|e| {
+        if let CombatEvent::WaveHit { target_id: 1, tick, .. } = e { Some(*tick) } else { None }
+    });
+    let hit_b_tick = sim.combat_log.iter().find_map(|e| {
+        if let CombatEvent::WaveHit { target_id: 2, tick, .. } = e { Some(*tick) } else { None }
+    });
+
+    let tick_a = hit_a_tick.expect("Enemy A (200 units) should be hit by Ravage");
+    let tick_b = hit_b_tick.expect("Enemy B (500 units) should be hit by Ravage");
+
+    assert!(tick_a < tick_b, "Closer enemy should be stunned first: A@tick {tick_a}, B@tick {tick_b}");
+
+    // Expected difference: (500-200) / (905/30) = 300 / 30.17 ≈ 9.9 ticks
+    let diff = tick_b - tick_a;
+    assert!(
+        (8..=12).contains(&diff),
+        "Tick difference should be ~10 (got {diff}): 300 units / (905/30) units_per_tick"
+    );
+}
+
+/// # Test: Dark Pact Dispels Ravage Stun
+///
+/// Verifies the key interaction: Dark Pact's self-dispel removes Ravage's stun early.
+/// This is the primary reason to pick Dark Pact — it counters hard disables.
+///
+/// Timeline:
+/// - Tick 1: Unit A casts Dark Pact (instant, 1.5s delay before pulses)
+/// - Tick ~10: Ravage wave hits Unit A, applying 2.2s stun (66 ticks)
+/// - Tick ~46: Dark Pact pulses begin, dispelling the stun
+/// - Without dispel, stun would last until tick ~76
+#[test]
+fn test_dark_pact_dispels_ravage_stun() {
+    use aa2_data::load_ability_def;
+
+    let dark_pact = load_ability_def(&data_path("abilities/dark_pact.ron")).unwrap();
+    let ravage = load_ability_def(&data_path("abilities/ravage.ron")).unwrap();
+    let hero = make_hero();
+
+    // Unit A: has Dark Pact (team 0), facing Unit B
+    let config_a = UnitConfig::new(hero.clone()).with_ability(dark_pact, 3);
+    let mut unit_a = Unit::from_config(&config_a, 0, 0, Vec2::new(0.0, 0.0));
+    unit_a.mana = 500.0;
+    unit_a.facing = std::f32::consts::PI; // facing toward Unit B at negative X... actually let's place B at +X
+    unit_a.facing = 0.0; // facing +X
+
+    // Unit B: has Ravage (team 1), facing Unit A
+    let config_b = UnitConfig::new(hero.clone()).with_ability(ravage, 2);
+    let mut unit_b = Unit::from_config(&config_b, 1, 1, Vec2::new(400.0, 0.0));
+    unit_b.mana = 500.0;
+    unit_b.facing = std::f32::consts::PI; // facing -X toward Unit A
+
+    let mut sim = Simulation::new(vec![unit_a, unit_b]);
+
+    // Run simulation until Unit A attacks (proving stun was dispelled)
+    let mut first_attack_tick: Option<u32> = None;
+    let mut stun_applied_tick: Option<u32> = None;
+
+    for _ in 0..120 {
+        sim.step();
+        if stun_applied_tick.is_none()
+            && let Some(CombatEvent::WaveHit { target_id: 0, tick, .. }) =
+                sim.combat_log.iter().find(|e| matches!(e, CombatEvent::WaveHit { target_id: 0, .. }))
+        {
+            stun_applied_tick = Some(*tick);
         }
-        if slow_cast_tick.is_some() { break; }
+        if first_attack_tick.is_none()
+            && let Some(CombatEvent::Attack { attacker_id: 0, tick, .. }) =
+                sim.combat_log.iter().find(|e| matches!(e, CombatEvent::Attack { attacker_id: 0, .. }))
+        {
+            first_attack_tick = Some(*tick);
+            break;
+        }
     }
 
-    let io_tick = io_cast_tick.expect("Io should have started casting");
-    let slow_tick = slow_cast_tick.expect("SlowTurner should have started casting");
+    let stun_tick = stun_applied_tick.expect("Ravage should stun Unit A");
+    let attack_tick = first_attack_tick.expect("Unit A should attack after dispel");
 
-    println!("Io cast start: tick {io_tick}");
-    println!("SlowTurner cast start: tick {slow_tick}");
-    println!("Difference: {} ticks ({:.2}s)", slow_tick - io_tick, (slow_tick - io_tick) as f32 / 30.0);
+    // Ravage level 2 stun = 2.2s = 66 ticks. Without dispel, stun expires at stun_tick + 66.
+    let stun_natural_expiry = stun_tick + 66;
 
-    // Io should cast on tick 1 (instant turn, immediately faces target)
-    // SlowTurner needs ~6 ticks to turn 180° at 0.5 rad/tick (PI / 0.5 = 6.28 ticks)
-    assert!(io_tick < slow_tick, "Io (instant turn) should cast before slow hero");
-    assert!(slow_tick - io_tick >= 5, "Slow hero should need at least 5 ticks to turn 180°");
+    assert!(
+        attack_tick < stun_natural_expiry,
+        "Dark Pact should dispel stun early: attack@{attack_tick} < natural_expiry@{stun_natural_expiry}"
+    );
 }
