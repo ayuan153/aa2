@@ -1,7 +1,0 @@
-Loadout(
-    hero: "crystal_maiden",
-    abilities: [
-        ("fireball", 4),
-        ("war_cry", 2),
-    ],
-)

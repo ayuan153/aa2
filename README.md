@@ -61,15 +61,15 @@ Every mechanic verification is encoded as an automated test. If you can observe 
 ### Run Dev Mode
 
 ```bash
-cargo run --bin aa2-dev                                    # 1v1 default (Warrior vs Ranger)
+cargo run --bin aa2-dev                                    # 1v1 default (Sven vs Drow)
 cargo run --bin aa2-dev -- data/heroes/sven.ron data/heroes/drow.ron  # Custom 1v1
 cargo run --bin aa2-dev -- --5v5                            # 5v5 brawl with all heroes
-cargo run --bin aa2-dev -- --loadout data/loadouts/sven_nuker.ron data/loadouts/cm_ravage.ron  # With abilities
+cargo run --bin aa2-dev -- --loadout data/loadouts/sven_ravage.ron data/loadouts/cm_ravage.ron  # With abilities
 ```
 
 ## Heroes Available
 
-Warrior, Ranger, Sven, Drow Ranger, Chaos Knight, Juggernaut, Crystal Maiden
+Sven, Drow Ranger, Chaos Knight, Juggernaut, Crystal Maiden, Io
 
 ## Game Overview
 

@@ -926,51 +926,51 @@ mod tests {
     use aa2_data::{Attribute, HeroDef};
     use unit::{derive_stats, compute_attack_interval};
 
-    fn make_warrior() -> HeroDef {
+    fn make_sven() -> HeroDef {
         HeroDef {
-            name: "Warrior".to_string(),
+            name: "Sven".to_string(),
             primary_attribute: Attribute::Strength,
-            base_str: 25.0,
-            base_agi: 15.0,
-            base_int: 10.0,
+            base_str: 24.0,
+            base_agi: 18.0,
+            base_int: 16.0,
             str_gain: 3.0,
             agi_gain: 1.5,
             int_gain: 1.0,
-            base_attack_time: 1.7,
+            base_attack_time: 1.9,
             attack_range: 150.0,
-            attack_point: 0.5,
-            move_speed: 300.0,
+            attack_point: 0.4,
+            move_speed: 325.0,
             turn_rate: 0.6,
             collision_radius: 24.0,
             tier: 1,
             is_melee: true,
-            base_damage_min: 28.0,
-            base_damage_max: 32.0,
+            base_damage_min: 36.0,
+            base_damage_max: 38.0,
             projectile_speed: None,
         }
     }
 
-    fn make_ranger() -> HeroDef {
+    fn make_drow() -> HeroDef {
         HeroDef {
-            name: "Ranger".to_string(),
+            name: "Drow".to_string(),
             primary_attribute: Attribute::Agility,
-            base_str: 15.0,
-            base_agi: 25.0,
-            base_int: 10.0,
+            base_str: 16.0,
+            base_agi: 24.0,
+            base_int: 15.0,
             str_gain: 1.5,
             agi_gain: 3.0,
             int_gain: 1.0,
             base_attack_time: 1.7,
-            attack_range: 600.0,
-            attack_point: 0.3,
-            move_speed: 300.0,
-            turn_rate: 0.6,
+            attack_range: 625.0,
+            attack_point: 0.5,
+            move_speed: 310.0,
+            turn_rate: 0.7,
             collision_radius: 24.0,
             tier: 1,
             is_melee: false,
-            base_damage_min: 23.0,
-            base_damage_max: 27.0,
-            projectile_speed: Some(900.0),
+            base_damage_min: 27.0,
+            base_damage_max: 34.0,
+            projectile_speed: Some(1250.0),
         }
     }
 
@@ -984,22 +984,22 @@ mod tests {
 
     #[test]
     fn test_attribute_derivation() {
-        let stats = derive_stats(25.0, 15.0, 10.0, &Attribute::Strength, 0.0, 28.0, 32.0);
-        assert!((stats.max_hp - (120.0 + 25.0 * 22.0)).abs() < 0.01);
-        assert!((stats.max_mana - (75.0 + 10.0 * 12.0)).abs() < 0.01);
-        assert!((stats.hp_regen - (0.25 + 25.0 * 0.1)).abs() < 0.01);
-        assert!((stats.mana_regen - (0.0 + 10.0 * 0.05)).abs() < 0.01);
-        assert!((stats.armor - (0.0 + 15.0 * 0.167)).abs() < 0.01);
-        assert!((stats.total_attack_speed - 115.0).abs() < 0.01);
-        assert!((stats.damage_min - 53.0).abs() < 0.01); // base_min 28 + primary STR 25
-        assert!((stats.damage_max - 57.0).abs() < 0.01); // base_max 32 + primary STR 25
+        let stats = derive_stats(24.0, 18.0, 16.0, &Attribute::Strength, 0.0, 36.0, 38.0);
+        assert!((stats.max_hp - (120.0 + 24.0 * 22.0)).abs() < 0.01);
+        assert!((stats.max_mana - (75.0 + 16.0 * 12.0)).abs() < 0.01);
+        assert!((stats.hp_regen - (0.25 + 24.0 * 0.1)).abs() < 0.01);
+        assert!((stats.mana_regen - (0.0 + 16.0 * 0.05)).abs() < 0.01);
+        assert!((stats.armor - (0.0 + 18.0 * 0.167)).abs() < 0.01);
+        assert!((stats.total_attack_speed - 118.0).abs() < 0.01);
+        assert!((stats.damage_min - 60.0).abs() < 0.01); // base_min 36 + primary STR 24
+        assert!((stats.damage_max - 62.0).abs() < 0.01); // base_max 38 + primary STR 24
     }
 
     #[test]
     fn test_attack_interval() {
-        // BAT 1.7, total AS 115 -> interval = 1.7 / 1.15
-        let interval = compute_attack_interval(1.7, 115.0);
-        let expected = 1.7 / 1.15;
+        // BAT 1.9, total AS 118 -> interval = 1.9 / 1.18
+        let interval = compute_attack_interval(1.9, 118.0);
+        let expected = 1.9 / 1.18;
         assert!((interval - expected).abs() < 0.001);
     }
 
@@ -1019,7 +1019,7 @@ mod tests {
         // Unit facing 0 radians, target at PI radians away
         // turn_rate = 0.6 rad/tick
         // PI / 0.6 = ~5.24 -> 6 ticks to turn (since last step overshoots)
-        let def = make_warrior();
+        let def = make_sven();
         let mut unit = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         unit.facing = 0.0;
         // Target behind: angle PI
@@ -1044,7 +1044,7 @@ mod tests {
 
     #[test]
     fn test_melee_combat() {
-        let def = make_warrior();
+        let def = make_sven();
         let u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
 
@@ -1063,8 +1063,8 @@ mod tests {
 
         if let Some(CombatEvent::Attack { damage, .. }) = first_attack {
             // damage should be in range [damage_min, damage_max] * armor_multiplier
-            let min_expected = apply_armor(53.0, sim.units[1].armor); // 28 + 25 STR
-            let max_expected = apply_armor(57.0, sim.units[1].armor); // 32 + 25 STR
+            let min_expected = apply_armor(60.0, sim.units[1].armor); // 36 + 24 STR
+            let max_expected = apply_armor(62.0, sim.units[1].armor); // 38 + 24 STR
             assert!(*damage >= min_expected - 0.01 && *damage <= max_expected + 0.01,
                 "Damage {damage} not in expected range [{min_expected}, {max_expected}]");
         }
@@ -1072,10 +1072,10 @@ mod tests {
 
     #[test]
     fn test_ranged_combat() {
-        let ranger_def = make_ranger();
-        let warrior_def = make_warrior();
+        let ranger_def = make_drow();
+        let sven_def = make_sven();
         let u0 = Unit::from_hero_def(&ranger_def, 0, 0, Vec2::new(0.0, 0.0));
-        let u1 = Unit::from_hero_def(&warrior_def, 1, 1, Vec2::new(400.0, 0.0));
+        let u1 = Unit::from_hero_def(&sven_def, 1, 1, Vec2::new(400.0, 0.0));
 
         let mut sim = Simulation::new(vec![u0, u1]);
 
@@ -1104,15 +1104,15 @@ mod tests {
             if let CombatEvent::ProjectileHit { tick, .. } = e { Some(*tick) } else { None }
         }).unwrap();
 
-        // Projectile travel time: distance / speed / TICK_DURATION ticks
-        // Distance ~400, speed 900, travel time = 400/900 = 0.44s = ~13 ticks
+        // Projectile travel time: target moves toward attacker during wind-up,
+        // so actual distance is less than 400. Drow projectile speed = 1250.
         let travel_ticks = hit_tick - spawn_tick;
-        assert!(travel_ticks > 5 && travel_ticks < 30, "Unexpected travel time: {travel_ticks}");
+        assert!(travel_ticks >= 1 && travel_ticks < 30, "Unexpected travel time: {travel_ticks}");
     }
 
     #[test]
     fn test_combat_to_death() {
-        let def = make_warrior();
+        let def = make_sven();
         let u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
 
@@ -1136,7 +1136,7 @@ mod tests {
     fn test_stunned_unit_cannot_attack() {
         use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags};
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
 
@@ -1178,7 +1178,7 @@ mod tests {
         use aa2_data::{AbilityDef, DamageType, Effect, TargetType};
         use crate::cast::AbilityState;
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
 
@@ -1212,7 +1212,7 @@ mod tests {
         use aa2_data::{AbilityDef, DamageType, Effect, TargetType};
         use crate::cast::AbilityState;
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
 
@@ -1249,7 +1249,7 @@ mod tests {
         use aa2_data::{AbilityDef, DamageType, Effect, TargetType};
         use crate::cast::AbilityState;
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
 
@@ -1287,7 +1287,7 @@ mod tests {
         use crate::cast::AbilityState;
         use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags};
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
 
@@ -1334,7 +1334,7 @@ mod tests {
     fn test_unit_from_config() {
         use aa2_data::{AbilityDef, DamageType, Effect, TargetType, UnitConfig};
 
-        let hero = make_warrior();
+        let hero = make_sven();
         let ability1 = AbilityDef {
             name: "Fireball".to_string(),
             cooldown: vec![10.0],
@@ -1376,26 +1376,23 @@ mod tests {
         use aa2_data::{load_loadout, resolve_loadout};
         use std::path::Path;
 
-        let loadout = load_loadout(Path::new("../../data/loadouts/sven_nuker.ron")).unwrap();
+        let loadout = load_loadout(Path::new("../../data/loadouts/sven_ravage.ron")).unwrap();
         assert_eq!(loadout.hero, "sven");
-        assert_eq!(loadout.abilities.len(), 2);
-        assert_eq!(loadout.abilities[0], ("fireball".to_string(), 3));
-        assert_eq!(loadout.abilities[1], ("war_cry".to_string(), 1));
+        assert_eq!(loadout.abilities.len(), 1);
+        assert_eq!(loadout.abilities[0], ("ravage".to_string(), 2));
 
         let config = resolve_loadout(&loadout, Path::new("../../data")).unwrap();
         assert_eq!(config.hero.name, "Sven");
-        assert_eq!(config.abilities.len(), 2);
-        assert_eq!(config.abilities[0].0.name, "Fireball");
-        assert_eq!(config.abilities[0].1, 3);
-        assert_eq!(config.abilities[1].0.name, "War Cry");
-        assert_eq!(config.abilities[1].1, 1);
+        assert_eq!(config.abilities.len(), 1);
+        assert_eq!(config.abilities[0].0.name, "Ravage");
+        assert_eq!(config.abilities[0].1, 2);
     }
 
     #[test]
     fn test_str_buff_increases_hp() {
         use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0)); // far away, no combat
 
@@ -1426,7 +1423,7 @@ mod tests {
     fn test_str_buff_expiry_decreases_hp() {
         use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0));
 
@@ -1458,7 +1455,7 @@ mod tests {
     fn test_str_buff_non_lethal() {
         use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0));
 
@@ -1492,7 +1489,7 @@ mod tests {
     fn test_str_buff_non_lethal_floors_at_1() {
         use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0));
 
@@ -1524,7 +1521,7 @@ mod tests {
     fn test_bonus_hp_regen() {
         use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
 
-        let def = make_warrior();
+        let def = make_sven();
         let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
         let u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(9999.0, 0.0));
 

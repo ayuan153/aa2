@@ -30,8 +30,8 @@ fn run() -> Result<(), String> {
         return run_5v5();
     }
 
-    let hero1_path = args.get(1).map_or("data/heroes/warrior.ron", |s| s.as_str());
-    let hero2_path = args.get(2).map_or("data/heroes/ranger.ron", |s| s.as_str());
+    let hero1_path = args.get(1).map_or("data/heroes/sven.ron", |s| s.as_str());
+    let hero2_path = args.get(2).map_or("data/heroes/drow.ron", |s| s.as_str());
 
     let def1 = aa2_sim::aa2_data::load_hero_def(Path::new(hero1_path))?;
     let def2 = aa2_sim::aa2_data::load_hero_def(Path::new(hero2_path))?;
