@@ -1,0 +1,7 @@
+// Slark-style: Dark Pact for self-purge + AoE damage
+Loadout(
+    hero: "juggernaut",
+    abilities: [
+        ("dark_pact", 3),
+    ],
+)

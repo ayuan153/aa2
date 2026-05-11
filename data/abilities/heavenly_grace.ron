@@ -1,0 +1,30 @@
+// Heavenly Grace - Omniknight's protective buff
+// Targets an ally (also applies to self). Grants HP regen, STR, and status resistance.
+//
+// AA Scaling: 1/2/3 scale, 4-5 = level 3, 6 (Super) = big jump, 7-8 = level 6, 9 (Gaben) = max
+// Base (Dota L1/2/3): STR 8/18/28, HP regen 8/12/16, Status Resist 50%, Duration 10s
+// Super (6): +50% status resistance (total 100%!), +20 HP regen, -2s cooldown
+// Gaben (9): +50 STR bonus, undispellable
+AbilityDef(
+    name: "Heavenly Grace",
+    cooldown: 14.0,  // base cooldown at max normal level
+    mana_cost: 100.0,
+    cast_point: 0.25,
+    targeting: SingleAlly,
+    effects: [
+        BuffTargetAndSelf(
+            name: "Heavenly Grace",
+            // Duration: 10s all levels
+            duration: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0],
+            // HP Regen: L1=8, L2=12, L3=16, L4-5=16, L6(Super)=36, L7-8=36, L9(Gaben)=36
+            hp_regen: [8.0, 12.0, 16.0, 16.0, 16.0, 36.0, 36.0, 36.0, 36.0],
+            // Strength: L1=8, L2=18, L3=28, L4-5=28, L6(Super)=28, L7-8=28, L9(Gaben)=78
+            strength: [8.0, 18.0, 28.0, 28.0, 28.0, 28.0, 28.0, 28.0, 78.0],
+            // Status Resistance: 50% base, Super=100%, Gaben=100%
+            status_resistance: [0.5, 0.5, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0],
+        ),
+    ],
+    description: "Blesses a target ally and self with HP regen, strength, and status resistance.",
+    aoe_shape: None,
+    cast_range: 500.0,
+)

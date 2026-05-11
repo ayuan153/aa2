@@ -67,6 +67,12 @@ pub struct StatModifier {
     pub bonus_damage: f32,
     /// Bonus magic resistance (multiplicative with base).
     pub bonus_magic_resistance: f32,
+    /// Bonus HP regen per second (additive).
+    pub bonus_hp_regen: f32,
+    /// Bonus strength (adds HP + damage if STR primary).
+    pub bonus_strength: f32,
+    /// Status resistance (0.5 = 50% shorter debuffs).
+    pub status_resistance: f32,
 }
 
 /// Periodic tick effect (DoT or HoT).
@@ -207,6 +213,9 @@ pub fn total_stat_modifier(buffs: &[Buff]) -> StatModifier {
             result.bonus_move_speed += m.bonus_move_speed;
             result.bonus_damage += m.bonus_damage;
             result.bonus_magic_resistance += m.bonus_magic_resistance;
+            result.bonus_hp_regen += m.bonus_hp_regen;
+            result.bonus_strength += m.bonus_strength;
+            result.status_resistance += m.status_resistance;
         }
     }
     result

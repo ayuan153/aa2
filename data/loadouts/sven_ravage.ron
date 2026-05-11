@@ -1,0 +1,7 @@
+// Tidehunter-style: Ravage for massive AoE stun
+Loadout(
+    hero: "sven",
+    abilities: [
+        ("ravage", 2),
+    ],
+)

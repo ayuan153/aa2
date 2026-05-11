@@ -23,3 +23,11 @@ fn load_all() {
     let heroes = load_all_heroes(Path::new("../../data/heroes")).unwrap();
     assert!(heroes.len() >= 2);
 }
+
+#[test]
+fn load_dark_pact() {
+    let ability = aa2_data::load_ability_def(Path::new("../../data/abilities/dark_pact.ron")).unwrap();
+    assert_eq!(ability.name, "Dark Pact");
+    assert_eq!(ability.cast_point, 0.0);
+    assert_eq!(ability.effects.len(), 1);
+}

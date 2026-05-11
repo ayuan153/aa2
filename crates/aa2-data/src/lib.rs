@@ -36,6 +36,34 @@ pub enum Effect {
     ApplyBuff { name: String, duration: f32 },
     Heal { base: Vec<f32> },
     Summon { unit: String, count: u32 },
+    /// Dark Pact style: delayed pulsing AoE around self with self-damage and per-pulse dispel.
+    /// Caster can act freely during delay. Each pulse independently dispels.
+    DarkPact {
+        kind: DamageType,
+        total_damage: Vec<f32>,
+        radius: Vec<f32>,
+        self_damage_pct: f32,
+        delay: f32,
+        pulse_count: u32,
+        pulse_interval: f32,
+        dispel_self: bool,
+        non_lethal: bool,
+    },
+    /// Buff applied to target AND caster (Heavenly Grace self-cast mechanic).
+    BuffTargetAndSelf {
+        name: String,
+        duration: Vec<f32>,
+        hp_regen: Vec<f32>,
+        strength: Vec<f32>,
+        status_resistance: Vec<f32>,
+    },
+    /// Expanding wave AoE stun (Ravage). Hits units when wave reaches them.
+    ExpandingWaveStun {
+        damage: Vec<f32>,
+        stun_duration: Vec<f32>,
+        radius: Vec<f32>,
+        wave_speed: f32,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -12,10 +12,11 @@ pub mod cast;
 pub mod ability;
 pub mod aoe;
 pub mod ai;
+pub mod pending;
 
 use vec2::Vec2;
 use unit::{Unit, UnitState, ACQUISITION_RANGE, ACTION_THRESHOLD};
-use aa2_data::{HeroDef, UnitConfig};
+use aa2_data::{DamageType, HeroDef, UnitConfig};
 use projectile::Projectile;
 use combat::apply_armor;
 use buff::{tick_buffs, active_status};
@@ -54,6 +55,10 @@ pub enum CombatEvent {
     AbilityDamage { tick: u32, caster_id: u32, target_id: u32, ability_name: String, damage: f32, damage_type: aa2_data::DamageType },
     /// A unit was healed by an ability.
     Heal { tick: u32, target_id: u32, amount: f32 },
+    /// A Dark Pact pulse fired.
+    DarkPactPulse { tick: u32, caster_id: u32, enemies_hit: u32, self_damage: f32 },
+    /// An expanding wave hit a unit.
+    WaveHit { tick: u32, target_id: u32, damage: f32, stun_duration: f32 },
 }
 
 /// Xoshiro128++ RNG for deterministic damage rolls.
@@ -115,6 +120,8 @@ pub struct Simulation {
     pub units: Vec<Unit>,
     /// Active projectiles.
     pub projectiles: Vec<Projectile>,
+    /// Active pending effects (delayed/over-time).
+    pub pending_effects: Vec<pending::PendingEffect>,
     /// Current tick number.
     pub tick: Tick,
     /// Log of combat events.
@@ -166,6 +173,7 @@ impl Simulation {
         Self {
             units,
             projectiles: Vec::new(),
+            pending_effects: Vec::new(),
             tick: 0,
             combat_log: Vec::new(),
             finished: false,
@@ -232,6 +240,7 @@ impl Simulation {
         self.step_casts();
         self.step_units();
         apply_separation(&mut self.units);
+        self.step_pending_effects();
         self.step_projectiles();
         self.check_deaths();
         self.check_round_end();
@@ -298,6 +307,7 @@ impl Simulation {
                     let ability_events = ability::execute_ability(
                         &ability_def, level, caster_id, caster_team, caster_pos,
                         target_id, target_pos, &mut self.units, tick,
+                        &mut self.pending_effects,
                     );
                     events.extend(ability_events);
 
@@ -523,6 +533,168 @@ impl Simulation {
             self.projectiles.swap_remove(idx);
         }
         self.combat_log.extend(hit_events);
+    }
+
+    fn step_pending_effects(&mut self) {
+        use pending::PendingEffectKind;
+        use combat::apply_magic_resistance;
+        use buff::{apply_buff, dispel, Buff, DispelType, StackBehavior, StatusFlags};
+
+        let tick = self.tick;
+        let mut events = Vec::new();
+        let mut i = 0;
+        while i < self.pending_effects.len() {
+            if self.pending_effects[i].delay_ticks_remaining > 0 {
+                self.pending_effects[i].delay_ticks_remaining -= 1;
+                i += 1;
+                continue;
+            }
+
+            let caster_id = self.pending_effects[i].caster_id;
+            let caster_team = self.pending_effects[i].caster_team;
+
+            let remove = match &mut self.pending_effects[i].kind {
+                PendingEffectKind::DarkPactPulse {
+                    damage_per_pulse,
+                    radius,
+                    self_damage_pct,
+                    damage_type,
+                    dispel_self,
+                    non_lethal,
+                    pulses_remaining,
+                    pulse_interval_ticks,
+                    ticks_until_next_pulse,
+                } => {
+                    if *ticks_until_next_pulse > 0 {
+                        *ticks_until_next_pulse -= 1;
+                        i += 1;
+                        continue;
+                    }
+                    let dmg = *damage_per_pulse;
+                    let r = *radius;
+                    let self_pct = *self_damage_pct;
+                    let dt = damage_type.clone();
+                    let do_dispel = *dispel_self;
+                    let is_non_lethal = *non_lethal;
+                    let interval = *pulse_interval_ticks;
+
+                    *pulses_remaining -= 1;
+                    let done = *pulses_remaining == 0;
+                    *ticks_until_next_pulse = interval;
+
+                    // Find caster position
+                    let caster_pos = self.units.iter()
+                        .find(|u| u.id == caster_id)
+                        .map(|u| u.position)
+                        .unwrap_or(Vec2::zero());
+
+                    // Hit enemies in radius
+                    let mut enemies_hit = 0u32;
+                    for u in self.units.iter_mut() {
+                        if u.id == caster_id || u.team == caster_team || !u.is_alive() {
+                            continue;
+                        }
+                        if caster_pos.distance(u.position) <= r {
+                            let actual = match &dt {
+                                DamageType::Magical => apply_magic_resistance(dmg, u.magic_resistance),
+                                DamageType::Physical => combat::apply_armor(dmg, u.armor),
+                                DamageType::Pure => dmg,
+                            };
+                            u.hp -= actual;
+                            enemies_hit += 1;
+                        }
+                    }
+
+                    // Self-damage
+                    let mut self_damage = 0.0;
+                    if let Some(caster) = self.units.iter_mut().find(|u| u.id == caster_id) {
+                        let raw_self = dmg * self_pct;
+                        let actual_self = match &dt {
+                            DamageType::Magical => apply_magic_resistance(raw_self, caster.magic_resistance),
+                            DamageType::Physical => combat::apply_armor(raw_self, caster.armor),
+                            DamageType::Pure => raw_self,
+                        };
+                        caster.hp -= actual_self;
+                        if is_non_lethal && caster.hp < 1.0 {
+                            caster.hp = 1.0;
+                        }
+                        self_damage = actual_self;
+
+                        if do_dispel {
+                            dispel(&mut caster.buffs, DispelType::StrongDispel);
+                        }
+                    }
+
+                    events.push(CombatEvent::DarkPactPulse {
+                        tick, caster_id, enemies_hit, self_damage,
+                    });
+
+                    done
+                }
+                PendingEffectKind::ExpandingWave {
+                    damage,
+                    stun_duration_secs,
+                    max_radius,
+                    wave_speed,
+                    current_radius,
+                    origin,
+                    already_hit,
+                } => {
+                    *current_radius += *wave_speed * TICK_DURATION;
+                    let cr = *current_radius;
+                    let mr = *max_radius;
+                    let dmg = *damage;
+                    let stun_secs = *stun_duration_secs;
+                    let orig = *origin;
+
+                    for u in self.units.iter_mut() {
+                        if u.team == caster_team || !u.is_alive() || u.id == caster_id {
+                            continue;
+                        }
+                        if already_hit.contains(&u.id) {
+                            continue;
+                        }
+                        if orig.distance(u.position) <= cr {
+                            let actual = apply_magic_resistance(dmg, u.magic_resistance);
+                            u.hp -= actual;
+                            let base_ticks = (stun_secs * 30.0) as u32;
+                            let actual_ticks = if u.status_resistance > 0.0 {
+                                (base_ticks as f32 * (1.0 - u.status_resistance)) as u32
+                            } else {
+                                base_ticks
+                            };
+                            let stun_buff = Buff {
+                                name: "stun".to_string(),
+                                remaining_ticks: actual_ticks,
+                                tick_effect: None,
+                                stacking: StackBehavior::RefreshDuration,
+                                dispel_type: DispelType::StrongDispel,
+                                status: StatusFlags { stunned: true, ..StatusFlags::default() },
+                                stat_modifier: None,
+                                source_id: caster_id,
+                            };
+                            apply_buff(&mut u.buffs, stun_buff);
+                            already_hit.push(u.id);
+                            events.push(CombatEvent::WaveHit {
+                                tick,
+                                target_id: u.id,
+                                damage: actual,
+                                stun_duration: actual_ticks as f32 / 30.0,
+                            });
+                        }
+                    }
+
+                    cr >= mr
+                }
+            };
+
+            if remove {
+                self.pending_effects.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
+        self.combat_log.extend(events);
     }
 
     fn check_deaths(&mut self) {

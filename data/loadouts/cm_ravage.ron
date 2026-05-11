@@ -1,0 +1,7 @@
+// Crystal Maiden with Ravage - she has enough mana (INT hero)
+Loadout(
+    hero: "crystal_maiden",
+    abilities: [
+        ("ravage", 2),
+    ],
+)

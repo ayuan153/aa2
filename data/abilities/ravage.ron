@@ -1,0 +1,29 @@
+// Ravage - Tidehunter's ultimate AoE stun
+// Expanding wave from caster at 905 units/sec. Stuns and damages enemies on contact.
+// Closer enemies are stunned first; farther enemies stunned later.
+//
+// AA Scaling (ultimate): L1/2/3 = Dota L1/2/3, then 4-5 = L3, 6 (Super), 7-8 = L6, 9 (Gaben)
+// AA difference: reduced radius (700 base instead of Dota's 1250)
+// Super (6): +1s stun duration
+// Gaben (9): +600 radius, wave comes back in stunning for half duration
+AbilityDef(
+    name: "Ravage",
+    cooldown: 140.0,  // base cooldown
+    mana_cost: 125.0,
+    cast_point: 0.3,
+    targeting: NoTarget,
+    effects: [
+        ExpandingWaveStun(
+            // Damage (magical): L1=275, L2=375, L3=475, L4-5=475, L6(Super)=475, L7-8=475, L9(Gaben)=475
+            damage: [275.0, 375.0, 475.0, 475.0, 475.0, 475.0, 475.0, 475.0, 475.0],
+            // Stun duration: L1=2.0, L2=2.2, L3=2.4, L4-5=2.4, L6(Super)=3.4, L7-8=3.4, L9(Gaben)=3.4
+            stun_duration: [2.0, 2.2, 2.4, 2.4, 2.4, 3.4, 3.4, 3.4, 3.4],
+            // Radius: L1-5=700, L6-8=700, L9(Gaben)=1300
+            radius: [700.0, 700.0, 700.0, 700.0, 700.0, 700.0, 700.0, 700.0, 1300.0],
+            wave_speed: 905.0,
+        ),
+    ],
+    description: "Slams the ground, sending a wave that stuns and damages all enemies.",
+    aoe_shape: None,
+    cast_range: 0.0,  // Self-centered, no range needed
+)

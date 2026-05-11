@@ -1,0 +1,36 @@
+// Dark Pact - Slark's signature self-purge + AoE damage
+// After a 1.5s delay, pulses 10 times over 1s. Each pulse:
+//   - Damages enemies in radius (magical)
+//   - Deals 30% of pulse damage to self (magical, non-lethal)
+//   - Applies strong dispel to self
+// Caster can act freely during the delay.
+//
+// AA Scaling: 1/2/3 scale, 4-5 = level 3, 6 (Super) = big jump, 7-8 = level 6, 9 (Gaben) = max
+// Super (6): +150 damage, purges enemies, +150 radius, -1s cooldown
+// Gaben (9): +200 radius, applies hard dispel to allied heroes in radius
+AbilityDef(
+    name: "Dark Pact",
+    // Cooldown: 9/8/6 base, Super -1s = 5, Gaben stays 5
+    cooldown: 9.0,  // base cooldown (level-specific CDs would need array - using base for now)
+    mana_cost: 65.0,
+    cast_point: 0.0,  // Instant cast - no animation
+    targeting: NoTarget,
+    effects: [
+        DarkPact(
+            kind: Magical,
+            // Total damage: L1=70, L2=150, L3=300, L4-5=300, L6(Super)=450, L7-8=450, L9(Gaben)=600
+            total_damage: [70.0, 150.0, 300.0, 300.0, 300.0, 450.0, 450.0, 450.0, 600.0],
+            // Radius: L1-3=325, L4-5=325, L6(Super)=475, L7-8=475, L9(Gaben)=675
+            radius: [325.0, 325.0, 325.0, 325.0, 325.0, 475.0, 475.0, 475.0, 675.0],
+            self_damage_pct: 0.3,
+            delay: 1.5,
+            pulse_count: 10,
+            pulse_interval: 0.1,
+            dispel_self: true,
+            non_lethal: true,
+        ),
+    ],
+    description: "After a short delay, purges debuffs and damages nearby enemies. Deals 30% to self.",
+    aoe_shape: None,
+    cast_range: 0.0,  // Self-cast, no range needed
+)

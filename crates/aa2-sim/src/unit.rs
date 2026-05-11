@@ -92,6 +92,8 @@ pub struct Unit {
     pub target: Option<u32>,
     /// Active buffs/debuffs on this unit.
     pub buffs: Vec<Buff>,
+    /// Status resistance (0.0-1.0). Reduces debuff durations.
+    pub status_resistance: f32,
     /// Equipped abilities with runtime state.
     pub abilities: Vec<AbilityState>,
     /// In-progress cast, if any.
@@ -175,6 +177,7 @@ impl Unit {
             attack_timer: 0.0,
             target: None,
             buffs: Vec::new(),
+            status_resistance: 0.0,
             abilities: Vec::new(),
             cast_state: None,
         }

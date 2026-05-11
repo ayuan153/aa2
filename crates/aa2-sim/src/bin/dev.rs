@@ -246,5 +246,13 @@ fn print_event(event: &CombatEvent, names: &HashMap<u32, String>, units: &[Unit]
         CombatEvent::Heal { tick, target_id, amount } => {
             println!("[tick {tick}] {} healed for {amount:.1}", name(*target_id));
         }
+        CombatEvent::DarkPactPulse { tick, caster_id, enemies_hit, self_damage } => {
+            println!("[tick {tick}] {} Dark Pact pulse: {enemies_hit} enemies hit, {self_damage:.1} self-damage",
+                name(*caster_id));
+        }
+        CombatEvent::WaveHit { tick, target_id, damage, stun_duration } => {
+            println!("[tick {tick}] {} hit by wave for {damage:.1} damage, stunned {stun_duration:.2}s",
+                name(*target_id));
+        }
     }
 }
