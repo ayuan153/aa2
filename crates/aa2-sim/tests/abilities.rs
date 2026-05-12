@@ -2169,3 +2169,73 @@ fn test_caustic_finale_explosion_on_death() {
         "Nearby enemy should take Caustic Finale explosion: before={}, after={}",
         nearby_hp_before, sim.units[2].hp);
 }
+
+/// Glaives of Wisdom is totally blocked by magic immunity — no mana cost, no bonus damage.
+/// The attack becomes a regular physical attack.
+#[test]
+fn test_glaives_blocked_by_magic_immunity() {
+    let hero = make_test_hero();
+    let glaives = AbilityDef {
+        name: "Glaives of Wisdom".to_string(),
+        cooldown: vec![0.0],
+        mana_cost: vec![0.0],
+        cast_point: 0.0,
+        targeting: TargetType::Passive,
+        effects: vec![Effect::GlaivesOfWisdom {
+            int_damage_factor: vec![0.8],
+            mana_cost: vec![15.0],
+            steal_int_on_kill: vec![0.0],
+            steal_radius: 900.0,
+            bounce_radius: vec![0.0],
+        }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 0.0,
+        cast_behavior: aa2_data::CastBehavior::default(),
+        max_charges: None,
+    };
+
+    let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
+    attacker.abilities.push(AbilityState { def: glaives, cooldown_remaining: 0.0, level: 3, casts: 0, charges: None });
+    attacker.mana = 100.0;
+    let mana_before = attacker.mana;
+
+    // Target with magic immunity (Rage active)
+    let mut target = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
+    // Apply magic immunity buff
+    target.buffs.push(aa2_sim::buff::Buff {
+        name: "rage".to_string(),
+        remaining_ticks: 300,
+        tick_effect: None,
+        stacking: aa2_sim::buff::StackBehavior::RefreshDuration,
+        dispel_type: aa2_sim::buff::DispelType::Undispellable,
+        status: aa2_sim::buff::StatusFlags { magic_immune: true, ..Default::default() },
+        stat_modifier: None,
+        source_id: 1,
+        is_debuff: false,
+        pierces_magic_immunity: false,
+    });
+
+    let target_hp_before = target.hp;
+    let mut sim = Simulation::with_seed(vec![attacker, target], 42);
+
+    // Run until an attack lands
+    for _ in 0..200 {
+        if sim.combat_log.iter().any(|e| matches!(e, CombatEvent::Attack { .. })) { break; }
+        sim.step();
+    }
+
+    // Attacker should NOT have spent Glaives mana (blocked by immunity)
+    // Mana may have increased slightly from regen, but should not have decreased by 15
+    assert!(sim.units[0].mana >= mana_before,
+        "Glaives mana should not be spent against magic immune target (mana: {}, was: {})",
+        sim.units[0].mana, mana_before);
+
+    // Target should have taken ONLY physical damage (no magical bonus)
+    // Physical damage from a TestHero with 20 STR primary = ~20 base + 20 primary = 40 damage
+    // After armor reduction it should be less than 40
+    let damage_taken = target_hp_before - sim.units[1].hp;
+    assert!(damage_taken > 0.0, "Target should still take physical damage");
+    assert!(damage_taken < 50.0,
+        "Damage ({:.1}) should be only physical (no Glaives magical bonus)", damage_taken);
+}

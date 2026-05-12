@@ -73,6 +73,7 @@ pub(crate) fn process_attack_modifiers(
     tick: u32,
     rng: &mut crate::Rng,
     ally_chaos_strike: Option<(f32, f32, f32, f32)>, // (proc_chance, crit_min, crit_max, lifesteal)
+    target_is_magic_immune: bool,
 ) -> AttackResult {
     let mut crit_multiplier = 1.0_f32;
     let mut lifesteal_pct = 0.0_f32;
@@ -110,6 +111,8 @@ pub(crate) fn process_attack_modifiers(
                     set_fury_swipes_stacks(&mut attacker.attack_modifier_state, target_id, stacks + 1, expiry);
                 }
                 Effect::GlaivesOfWisdom { int_damage_factor, mana_cost, .. } => {
+                    // Glaives is totally blocked by magic immunity — becomes regular attack
+                    if target_is_magic_immune { continue; }
                     let cost = value_at_level(mana_cost, level);
                     if attacker.mana < cost {
                         continue; // Can't afford — skip
@@ -463,7 +466,7 @@ mod tests {
 
         let mut damages = Vec::new();
         for tick in 0..5 {
-            let result = process_attack_modifiers(&mut attacker, target_id, base_damage, tick, &mut rng, None);
+            let result = process_attack_modifiers(&mut attacker, target_id, base_damage, tick, &mut rng, None, false);
             damages.push(result.damage);
         }
 
@@ -533,11 +536,11 @@ mod tests {
         let base_damage = 50.0;
 
         // First attack: 0 FS stacks. Crit = 2.0x. Damage = 50*2 + 0 = 100
-        let r1 = process_attack_modifiers(&mut attacker, target_id, base_damage, 0, &mut rng, None);
+        let r1 = process_attack_modifiers(&mut attacker, target_id, base_damage, 0, &mut rng, None, false);
         assert!((r1.damage - 100.0).abs() < 0.01, "Expected 100, got {}", r1.damage);
 
         // Second attack: 1 FS stack. Crit = 2.0x. Damage = 50*2 + 20 = 120 (NOT 50+20)*2=140)
-        let r2 = process_attack_modifiers(&mut attacker, target_id, base_damage, 1, &mut rng, None);
+        let r2 = process_attack_modifiers(&mut attacker, target_id, base_damage, 1, &mut rng, None, false);
         assert!((r2.damage - 120.0).abs() < 0.01, "Expected 120, got {}", r2.damage);
     }
 
@@ -575,7 +578,7 @@ mod tests {
 
         let mut target = make_test_unit(1, 1);
         let base_damage = 50.0;
-        let result = process_attack_modifiers(&mut attacker, target.id, base_damage, 0, &mut rng, None);
+        let result = process_attack_modifiers(&mut attacker, target.id, base_damage, 0, &mut rng, None, false);
 
         // Damage dealt after armor would be less, but lifesteal is on pre-armor damage
         let damage_dealt = 60.0; // simulated post-armor
@@ -694,7 +697,7 @@ mod tests {
             casts: 0,
             charges: None,        });
 
-        let result = process_attack_modifiers(&mut attacker, 1, 50.0, 0, &mut rng, None);
+        let result = process_attack_modifiers(&mut attacker, 1, 50.0, 0, &mut rng, None, false);
         // 80% of 40 INT = 32 bonus magical damage
         assert!((result.bonus_magical_damage - 32.0).abs() < 0.01, "Expected 32, got {}", result.bonus_magical_damage);
         assert!(result.glaives_active);
@@ -734,7 +737,7 @@ mod tests {
             casts: 0,
             charges: None,        });
 
-        let result = process_attack_modifiers(&mut attacker, 1, 50.0, 0, &mut rng, None);
+        let result = process_attack_modifiers(&mut attacker, 1, 50.0, 0, &mut rng, None, false);
         // No mana = no bonus damage
         assert!((result.bonus_magical_damage - 0.0).abs() < 0.01);
         assert!(!result.glaives_active);

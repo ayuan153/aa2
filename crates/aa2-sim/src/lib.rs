@@ -470,8 +470,9 @@ impl Simulation {
 
                     // Process attack modifiers (crit, fury swipes)
                     let ally_aura = find_ally_chaos_strike_aura(&self.units[i], &self.units);
+                    let target_magic_immune = active_status(&self.units[target_idx].buffs).magic_immune;
                     let atk_result = process_attack_modifiers(
-                        &mut self.units[i], target_id, raw_dmg, self.tick, &mut self.rng, ally_aura,
+                        &mut self.units[i], target_id, raw_dmg, self.tick, &mut self.rng, ally_aura, target_magic_immune,
                     );
                     let modified_dmg = atk_result.damage;
 
@@ -1112,8 +1113,9 @@ impl Simulation {
         // Roll base damage and run full attack modifier pipeline
         let raw_dmg = self.rng.range_f32(self.units[attacker_idx].damage_min, self.units[attacker_idx].damage_max);
         let ally_aura = find_ally_chaos_strike_aura(&self.units[attacker_idx], &self.units);
+        let bounce_target_magic_immune = active_status(&self.units[bounce_idx].buffs).magic_immune;
         let atk_result = process_attack_modifiers(
-            &mut self.units[attacker_idx], bounce_target_id, raw_dmg, self.tick, &mut self.rng, ally_aura,
+            &mut self.units[attacker_idx], bounce_target_id, raw_dmg, self.tick, &mut self.rng, ally_aura, bounce_target_magic_immune,
         );
 
         // 50% physical damage
