@@ -1990,3 +1990,175 @@ fn test_charges_system() {
     assert_eq!(sim.units[0].abilities[0].charges.as_ref().unwrap().current_charges, 0,
         "Charges should be depleted after 2 casts");
 }
+
+/// Burrowstrike wave hits closer enemies before farther ones (distance-based timing).
+#[test]
+fn test_burrowstrike_wave_hits_closer_first() {
+    let hero = make_test_hero();
+    let ability = AbilityDef {
+        name: "Burrowstrike".to_string(),
+        cooldown: vec![14.0],
+        mana_cost: vec![100.0],
+        cast_point: 0.0,
+        targeting: TargetType::SingleEnemy,
+        effects: vec![Effect::Burrowstrike {
+            damage: vec![80.0],
+            stun_duration: vec![1.2],
+            range: vec![550.0],
+            width: 150.0,
+            travel_speed: 2000.0,
+            caustic_finale_damage: vec![0.0],
+            caustic_finale_radius: 400.0,
+        }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 550.0,
+        cast_behavior: aa2_data::CastBehavior::default(),
+        max_charges: None,
+    };
+
+    let config = UnitConfig::new(hero.clone()).with_ability(ability, 1);
+    let mut u0 = Unit::from_config(&config, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    // Close enemy at 100 units, far enemy at 500 units
+    let u_close = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
+    let u_far = Unit::from_hero_def(&hero, 2, 1, Vec2::new(500.0, 0.0));
+
+    let mut sim = Simulation::new(vec![u0, u_close, u_far]);
+
+    // Wave at 2000 u/s: reaches 100 at tick ~2, reaches 500 at tick ~8
+    // Run tick by tick and record when each gets stunned
+    let mut close_stun_tick = None;
+    let mut far_stun_tick = None;
+
+    for _ in 0..30 {
+        sim.step();
+        if close_stun_tick.is_none() && aa2_sim::buff::active_status(&sim.units[1].buffs).stunned {
+            close_stun_tick = Some(sim.tick);
+        }
+        if far_stun_tick.is_none() && aa2_sim::buff::active_status(&sim.units[2].buffs).stunned {
+            far_stun_tick = Some(sim.tick);
+        }
+    }
+
+    let close_tick = close_stun_tick.expect("Close enemy should be stunned");
+    let far_tick = far_stun_tick.expect("Far enemy should be stunned");
+
+    assert!(close_tick < far_tick,
+        "Close enemy (tick {}) should be stunned before far enemy (tick {})", close_tick, far_tick);
+    // At 2000 u/s: 400 unit difference = 0.2s = 6 ticks difference
+    let diff = far_tick - close_tick;
+    assert!(diff >= 4 && diff <= 8,
+        "Expected ~6 tick difference, got {}", diff);
+}
+
+/// Caster is invulnerable during Burrowstrike travel (can't be damaged).
+#[test]
+fn test_burrowstrike_invulnerable_during_travel() {
+    let hero = make_test_hero();
+    let ability = AbilityDef {
+        name: "Burrowstrike".to_string(),
+        cooldown: vec![14.0],
+        mana_cost: vec![100.0],
+        cast_point: 0.0,
+        targeting: TargetType::SingleEnemy,
+        effects: vec![Effect::Burrowstrike {
+            damage: vec![80.0],
+            stun_duration: vec![1.2],
+            range: vec![550.0],
+            width: 150.0,
+            travel_speed: 2000.0,
+            caustic_finale_damage: vec![0.0],
+            caustic_finale_radius: 400.0,
+        }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 550.0,
+        cast_behavior: aa2_data::CastBehavior::default(),
+        max_charges: None,
+    };
+
+    let config = UnitConfig::new(hero.clone()).with_ability(ability, 1);
+    let mut u0 = Unit::from_config(&config, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    let hp_before = u0.hp;
+
+    // Enemy that would normally attack the caster
+    let u1 = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
+
+    let mut sim = Simulation::new(vec![u0, u1]);
+
+    // Run for a few ticks — caster should be burrowing (invulnerable)
+    // Travel time: 550/2000 = 0.275s = ~9 ticks
+    for _ in 0..5 {
+        sim.step();
+    }
+
+    // Caster should be invulnerable (status check)
+    let status = aa2_sim::buff::active_status(&sim.units[0].buffs);
+    assert!(status.invulnerable, "Caster should be invulnerable during travel");
+
+    // Caster should not have taken any damage during travel
+    assert_eq!(sim.units[0].hp, hp_before,
+        "Caster should not take damage while invulnerable");
+}
+
+/// Caustic Finale: unit with debuff explodes on death, dealing damage in radius.
+#[test]
+fn test_caustic_finale_explosion_on_death() {
+    let hero = make_test_hero();
+    let ability = AbilityDef {
+        name: "Burrowstrike".to_string(),
+        cooldown: vec![14.0],
+        mana_cost: vec![100.0],
+        cast_point: 0.0,
+        targeting: TargetType::SingleEnemy,
+        effects: vec![Effect::Burrowstrike {
+            damage: vec![500.0], // high damage to kill quickly
+            stun_duration: vec![1.2],
+            range: vec![550.0],
+            width: 150.0,
+            travel_speed: 2000.0,
+            caustic_finale_damage: vec![150.0], // Super level
+            caustic_finale_radius: 400.0,
+        }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 550.0,
+        cast_behavior: aa2_data::CastBehavior::default(),
+        max_charges: None,
+    };
+
+    let config = UnitConfig::new(hero.clone()).with_ability(ability, 1);
+    let mut u0 = Unit::from_config(&config, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+
+    // Target with low HP (will die from Burrowstrike damage)
+    let mut target = Unit::from_hero_def(&hero, 1, 1, Vec2::new(200.0, 0.0));
+    target.hp = 100.0;
+
+    // Nearby enemy (within 400 radius of target, should take explosion damage)
+    let nearby = Unit::from_hero_def(&hero, 2, 1, Vec2::new(300.0, 0.0));
+    let nearby_hp_before = nearby.hp;
+
+    let mut sim = Simulation::new(vec![u0, target, nearby]);
+
+    // Run until target dies and explosion triggers
+    for _ in 0..100 {
+        if sim.units[1].hp <= 0.0 || !sim.units[1].is_alive() { break; }
+        sim.step();
+    }
+
+    // Continue a few more ticks for death processing
+    for _ in 0..5 {
+        sim.step();
+    }
+
+    // Target should be dead
+    assert!(!sim.units[1].is_alive(), "Target should have died from Burrowstrike");
+
+    // Nearby enemy should have taken Caustic Finale explosion damage
+    assert!(sim.units[2].hp < nearby_hp_before,
+        "Nearby enemy should take Caustic Finale explosion: before={}, after={}",
+        nearby_hp_before, sim.units[2].hp);
+}
