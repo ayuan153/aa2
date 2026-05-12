@@ -57,7 +57,7 @@ fn dark_pact_ability() -> AbilityDef {
         }],
         description: String::new(),
         aoe_shape: None,
-        cast_range: 600.0,
+        cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
     }
 }
 
@@ -78,7 +78,7 @@ fn heavenly_grace_ability() -> AbilityDef {
         }],
         description: String::new(),
         aoe_shape: None,
-        cast_range: 600.0,
+        cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
     }
 }
 
@@ -98,7 +98,7 @@ fn ravage_ability() -> AbilityDef {
         }],
         description: String::new(),
         aoe_shape: None,
-        cast_range: 600.0,
+        cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
     }
 }
 
@@ -547,7 +547,7 @@ fn test_hg_dispels_on_cast() {
         }],
         description: String::new(),
         aoe_shape: None,
-        cast_range: 600.0,
+        cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
     };
 
     execute_ability(
@@ -583,11 +583,12 @@ fn test_hg_targets_highest_y_ally() {
             effects: vec![],
             description: String::new(),
             aoe_shape: None,
-            cast_range: 600.0,
+            cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
         },
         cooldown_remaining: 0.0,
         level: 1,
         casts: 0, // first cast
+        charges: None,
     });
 
     // Allies at different y positions
@@ -621,11 +622,12 @@ fn test_hg_self_cast_when_no_allies() {
             effects: vec![],
             description: String::new(),
             aoe_shape: None,
-            cast_range: 600.0,
+            cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
         },
         cooldown_remaining: 0.0,
         level: 1,
         casts: 0,
+        charges: None,
     });
 
     // Only enemies, no allies
@@ -657,11 +659,12 @@ fn test_hg_targets_furthest_on_subsequent_cast() {
             effects: vec![],
             description: String::new(),
             aoe_shape: None,
-            cast_range: 600.0,
+            cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
         },
         cooldown_remaining: 0.0,
         level: 1,
         casts: 1, // subsequent cast
+        charges: None,
     });
 
     // Ally at y=300 but close (50 units away)
@@ -916,7 +919,7 @@ fn test_fury_swipes_damage_increases() {
     let fs = aa2_data::load_ability_def(Path::new("../../data/abilities/fury_swipes.ron")).unwrap();
 
     let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
-    attacker.abilities.push(AbilityState { def: fs, cooldown_remaining: 0.0, level: 3, casts: 0 });
+    attacker.abilities.push(AbilityState { def: fs, cooldown_remaining: 0.0, level: 3, casts: 0, charges: None });
 
     let enemy_def = aa2_data::load_hero_def(Path::new("../../data/heroes/sven.ron")).unwrap();
     let enemy = Unit::from_hero_def(&enemy_def, 1, 1, Vec2::new(100.0, 0.0));
@@ -951,8 +954,8 @@ fn test_fury_swipes_not_multiplied_by_crit() {
     let cs = aa2_data::load_ability_def(Path::new("../../data/abilities/chaos_strike.ron")).unwrap();
 
     let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
-    attacker.abilities.push(AbilityState { def: fs, cooldown_remaining: 0.0, level: 3, casts: 0 });
-    attacker.abilities.push(AbilityState { def: cs, cooldown_remaining: 0.0, level: 3, casts: 0 });
+    attacker.abilities.push(AbilityState { def: fs, cooldown_remaining: 0.0, level: 3, casts: 0, charges: None });
+    attacker.abilities.push(AbilityState { def: cs, cooldown_remaining: 0.0, level: 3, casts: 0, charges: None });
 
     let enemy_def = aa2_data::load_hero_def(Path::new("../../data/heroes/sven.ron")).unwrap();
     let enemy = Unit::from_hero_def(&enemy_def, 1, 1, Vec2::new(100.0, 0.0));
@@ -1006,7 +1009,7 @@ fn test_chaos_strike_lifesteal_heals() {
     let cs = aa2_data::load_ability_def(Path::new("../../data/abilities/chaos_strike.ron")).unwrap();
 
     let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
-    attacker.abilities.push(AbilityState { def: cs, cooldown_remaining: 0.0, level: 3, casts: 0 });
+    attacker.abilities.push(AbilityState { def: cs, cooldown_remaining: 0.0, level: 3, casts: 0, charges: None });
     // Damage attacker so we can see healing
     attacker.hp = 300.0;
 
@@ -1039,7 +1042,7 @@ fn test_essence_shift_stat_steal() {
     let es = aa2_data::load_ability_def(Path::new("../../data/abilities/essence_shift.ron")).unwrap();
 
     let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
-    attacker.abilities.push(AbilityState { def: es, cooldown_remaining: 0.0, level: 3, casts: 0 });
+    attacker.abilities.push(AbilityState { def: es, cooldown_remaining: 0.0, level: 3, casts: 0, charges: None });
     let _initial_attacker_max_hp = attacker.max_hp;
 
     let enemy_def = aa2_data::load_hero_def(Path::new("../../data/heroes/sven.ron")).unwrap();
@@ -1073,7 +1076,7 @@ fn test_dark_pact_cannot_purge_fury_swipes_or_essence_shift() {
 
     // Attacker with Essence Shift hits a target
     let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
-    attacker.abilities.push(AbilityState { def: es, cooldown_remaining: 0.0, level: 3, casts: 0 });
+    attacker.abilities.push(AbilityState { def: es, cooldown_remaining: 0.0, level: 3, casts: 0, charges: None });
 
     let target = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
 
@@ -1109,10 +1112,10 @@ fn test_essence_shift_mirror_match() {
     let es = aa2_data::load_ability_def(Path::new("../../data/abilities/essence_shift.ron")).unwrap();
 
     let mut unit_a = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
-    unit_a.abilities.push(AbilityState { def: es.clone(), cooldown_remaining: 0.0, level: 3, casts: 0 });
+    unit_a.abilities.push(AbilityState { def: es.clone(), cooldown_remaining: 0.0, level: 3, casts: 0, charges: None });
 
     let mut unit_b = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
-    unit_b.abilities.push(AbilityState { def: es, cooldown_remaining: 0.0, level: 3, casts: 0 });
+    unit_b.abilities.push(AbilityState { def: es, cooldown_remaining: 0.0, level: 3, casts: 0, charges: None });
 
     let initial_max_hp_a = unit_a.max_hp;
     let initial_max_hp_b = unit_b.max_hp;
@@ -1150,7 +1153,7 @@ fn test_fury_swipes_super_armor_reduction() {
 
     let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
     // Level 6 = Super (armor_reduction_per_stack = 1.5)
-    attacker.abilities.push(AbilityState { def: fs, cooldown_remaining: 0.0, level: 6, casts: 0 });
+    attacker.abilities.push(AbilityState { def: fs, cooldown_remaining: 0.0, level: 6, casts: 0, charges: None });
 
     let enemy_def = aa2_data::load_hero_def(Path::new("../../data/heroes/sven.ron")).unwrap();
     let enemy = Unit::from_hero_def(&enemy_def, 1, 1, Vec2::new(100.0, 0.0));
@@ -1192,7 +1195,7 @@ fn test_chaos_strike_gaben_aura() {
 
     // CK with Gaben Chaos Strike (level 9)
     let mut ck = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
-    ck.abilities.push(AbilityState { def: cs, cooldown_remaining: 0.0, level: 9, casts: 0 });
+    ck.abilities.push(AbilityState { def: cs, cooldown_remaining: 0.0, level: 9, casts: 0, charges: None });
 
     // Ally within 1200 radius (no Chaos Strike of their own)
     let ally_def = aa2_data::load_hero_def(Path::new("../../data/heroes/juggernaut.ron")).unwrap();
@@ -1237,7 +1240,7 @@ fn test_essence_shift_super_permanent_agi_on_kill() {
 
     // Attacker with Super Essence Shift (level 6)
     let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
-    attacker.abilities.push(AbilityState { def: es, cooldown_remaining: 0.0, level: 6, casts: 0 });
+    attacker.abilities.push(AbilityState { def: es, cooldown_remaining: 0.0, level: 6, casts: 0, charges: None });
 
     // Weak enemy that will die quickly (set low HP)
     let mut enemy = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
@@ -1279,7 +1282,7 @@ fn test_fury_swipes_gaben_spread() {
 
     // Attacker with Gaben Fury Swipes (level 9)
     let mut attacker = Unit::from_hero_def(&hero, 0, 0, Vec2::new(0.0, 0.0));
-    attacker.abilities.push(AbilityState { def: fs, cooldown_remaining: 0.0, level: 9, casts: 0 });
+    attacker.abilities.push(AbilityState { def: fs, cooldown_remaining: 0.0, level: 9, casts: 0, charges: None });
 
     // Two enemies close together
     let enemy_def = aa2_data::load_hero_def(Path::new("../../data/heroes/sven.ron")).unwrap();
@@ -1608,11 +1611,12 @@ fn test_glaives_bounce_applies_modifiers() {
             }],
             description: String::new(),
             aoe_shape: None,
-            cast_range: 0.0,
+            cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
         },
         cooldown_remaining: 0.0,
         level: 9,
         casts: 0,
+        charges: None,
     });
     attacker.abilities.push(AbilityState {
         def: AbilityDef {
@@ -1628,11 +1632,12 @@ fn test_glaives_bounce_applies_modifiers() {
             }],
             description: String::new(),
             aoe_shape: None,
-            cast_range: 0.0,
+            cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
         },
         cooldown_remaining: 0.0,
         level: 1,
         casts: 0,
+        charges: None,
     });
 
     // Primary target in melee range, secondary nearby
@@ -1705,11 +1710,12 @@ fn test_glaives_bounce_50_percent_physical() {
             }],
             description: String::new(),
             aoe_shape: None,
-            cast_range: 0.0,
+            cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
         },
         cooldown_remaining: 0.0,
         level: 9,
         casts: 0,
+        charges: None,
     });
 
     // Use 0 armor/magic resist targets for clean damage calculation
@@ -1751,4 +1757,224 @@ fn test_glaives_bounce_50_percent_physical() {
     let expected_secondary = 70.0; // 30 phys + 40 magic
     assert!((secondary_dmg - expected_secondary).abs() < 15.0,
         "Bounce damage should be ~{expected_secondary}, got {secondary_dmg}");
+}
+
+// ============================================================
+// CastBehavior / Targeting AI tests
+// ============================================================
+
+fn make_test_hero() -> HeroDef {
+    HeroDef {
+        name: "TestHero".to_string(),
+        primary_attribute: Attribute::Strength,
+        base_str: 20.0,
+        base_agi: 20.0,
+        base_int: 20.0,
+        str_gain: 2.0,
+        agi_gain: 2.0,
+        int_gain: 2.0,
+        base_attack_time: 1.7,
+        attack_range: 150.0,
+        attack_point: 0.5,
+        move_speed: 300.0,
+        turn_rate: 0.6,
+        collision_radius: 24.0,
+        tier: 1,
+        is_melee: true,
+        base_damage_min: 30.0,
+        base_damage_max: 30.0,
+        projectile_speed: None,
+    }
+}
+
+#[test]
+fn test_lazy_targeting_no_walk() {
+    // Unit with Lazy ability, enemy out of range — should NOT walk toward enemy
+    let hero = make_test_hero();
+    let ability = AbilityDef {
+        name: "LazySpell".to_string(),
+        cooldown: vec![10.0],
+        mana_cost: vec![50.0],
+        cast_point: 0.0,
+        targeting: TargetType::SingleEnemy,
+        effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 300.0,
+        cast_behavior: aa2_data::CastBehavior::Lazy,
+        max_charges: None,
+    };
+
+    let config_a = UnitConfig::new(hero.clone()).with_ability(ability, 1);
+    let config_b = UnitConfig::new(hero);
+
+    // Place enemy at 2000 units away (well beyond cast_range of 300, and beyond acquisition range)
+    let mut u0 = Unit::from_config(&config_a, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    let u1 = Unit::from_hero_def(&config_b.hero, 1, 1, Vec2::new(2000.0, 0.0));
+
+    let initial_pos = u0.position;
+    let mut sim = Simulation::new(vec![u0, u1]);
+
+    // Run for 60 ticks (2 seconds) — enemy is beyond acquisition range so no walking
+    for _ in 0..60 {
+        sim.step();
+    }
+
+    // Unit should NOT have cast (enemy out of Lazy range)
+    let has_cast = sim.combat_log.iter().any(|e| matches!(e, CombatEvent::CastStart { ability_name, .. } if ability_name == "LazySpell"));
+    assert!(!has_cast, "Lazy ability should not cast when target is out of range");
+
+    // Unit should not have moved (no target in acquisition range)
+    assert!((sim.units[0].position.x - initial_pos.x).abs() < 1.0,
+        "Unit with Lazy ability should not walk toward distant enemy");
+}
+
+#[test]
+fn test_burrowstrike_line_stun() {
+    let hero = make_test_hero();
+    let ability = AbilityDef {
+        name: "Burrowstrike".to_string(),
+        cooldown: vec![14.0],
+        mana_cost: vec![100.0],
+        cast_point: 0.0,
+        targeting: TargetType::SingleEnemy,
+        effects: vec![Effect::Burrowstrike {
+            damage: vec![80.0],
+            stun_duration: vec![1.2],
+            range: vec![550.0],
+            width: 300.0,
+            caster_teleports: true,
+        }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 550.0,
+        cast_behavior: aa2_data::CastBehavior::default(),
+        max_charges: None,
+    };
+
+    let config = UnitConfig::new(hero.clone()).with_ability(ability, 1);
+    let mut u0 = Unit::from_config(&config, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    // Place enemies in a line
+    let u1 = Unit::from_hero_def(&hero, 1, 1, Vec2::new(200.0, 0.0));
+    let u2 = Unit::from_hero_def(&hero, 2, 1, Vec2::new(400.0, 0.0));
+    // Enemy off to the side (outside width)
+    let u3 = Unit::from_hero_def(&hero, 3, 1, Vec2::new(200.0, 200.0));
+
+    let hp_before_1 = u1.hp;
+    let hp_before_2 = u2.hp;
+    let hp_before_3 = u3.hp;
+
+    let mut sim = Simulation::new(vec![u0, u1, u2, u3]);
+
+    // Run until cast completes (instant cast point)
+    for _ in 0..10 {
+        sim.step();
+    }
+
+    // Check that enemies in line were damaged
+    let dmg_events: Vec<_> = sim.combat_log.iter().filter(|e| matches!(e, CombatEvent::AbilityDamage { ability_name, .. } if ability_name == "Burrowstrike")).collect();
+    assert!(dmg_events.len() >= 2, "Should hit at least 2 enemies in line, got {}", dmg_events.len());
+
+    // Enemies in line should be stunned
+    let u1_stunned = aa2_sim::buff::active_status(&sim.units[1].buffs).stunned;
+    let u2_stunned = aa2_sim::buff::active_status(&sim.units[2].buffs).stunned;
+    assert!(u1_stunned, "Enemy 1 in line should be stunned");
+    assert!(u2_stunned, "Enemy 2 in line should be stunned");
+
+    // Enemy off to the side should NOT be stunned
+    let u3_stunned = aa2_sim::buff::active_status(&sim.units[3].buffs).stunned;
+    assert!(!u3_stunned, "Enemy 3 off to the side should not be stunned");
+
+    // Verify damage was dealt
+    assert!(sim.units[1].hp < hp_before_1, "Enemy 1 should have taken damage");
+    assert!(sim.units[2].hp < hp_before_2, "Enemy 2 should have taken damage");
+    assert!((sim.units[3].hp - hp_before_3).abs() < 1.0, "Enemy 3 should not have taken damage");
+}
+
+#[test]
+fn test_burrowstrike_teleport() {
+    let hero = make_test_hero();
+    let ability = AbilityDef {
+        name: "Burrowstrike".to_string(),
+        cooldown: vec![14.0],
+        mana_cost: vec![100.0],
+        cast_point: 0.0,
+        targeting: TargetType::SingleEnemy,
+        effects: vec![Effect::Burrowstrike {
+            damage: vec![80.0],
+            stun_duration: vec![1.2],
+            range: vec![550.0],
+            width: 300.0,
+            caster_teleports: true,
+        }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 550.0,
+        cast_behavior: aa2_data::CastBehavior::default(),
+        max_charges: None,
+    };
+
+    let config = UnitConfig::new(hero.clone()).with_ability(ability, 1);
+    let mut u0 = Unit::from_config(&config, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    let u1 = Unit::from_hero_def(&hero, 1, 1, Vec2::new(300.0, 0.0));
+
+    let mut sim = Simulation::new(vec![u0, u1]);
+
+    // Run until cast completes
+    for _ in 0..10 {
+        sim.step();
+    }
+
+    // Caster should have teleported to end point (550 units in direction of target)
+    let caster_pos = sim.units[0].position;
+    assert!((caster_pos.x - 550.0).abs() < 50.0,
+        "Caster should teleport to ~550 along x, got {}", caster_pos.x);
+}
+
+#[test]
+fn test_charges_system() {
+    let hero = make_test_hero();
+    let ability = AbilityDef {
+        name: "ChargedSpell".to_string(),
+        cooldown: vec![10.0],
+        mana_cost: vec![50.0],
+        cast_point: 0.0,
+        targeting: TargetType::SingleEnemy,
+        effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
+        description: String::new(),
+        aoe_shape: None,
+        cast_range: 600.0,
+        cast_behavior: aa2_data::CastBehavior::default(),
+        max_charges: Some(2),
+    };
+
+    let config = UnitConfig::new(hero.clone()).with_ability(ability, 1);
+    let mut u0 = Unit::from_config(&config, 0, 0, Vec2::new(0.0, 0.0));
+    u0.mana = 500.0;
+    let u1 = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));
+
+    let mut sim = Simulation::new(vec![u0, u1]);
+
+    // Run until first cast
+    for _ in 0..30 {
+        sim.step();
+    }
+
+    let cast_count = sim.combat_log.iter().filter(|e| matches!(e, CombatEvent::CastComplete { ability_name, .. } if ability_name == "ChargedSpell")).count();
+    assert!(cast_count >= 1, "Should have cast at least once");
+
+    // Run more to get second cast
+    for _ in 0..30 {
+        sim.step();
+    }
+
+    let cast_count = sim.combat_log.iter().filter(|e| matches!(e, CombatEvent::CastComplete { ability_name, .. } if ability_name == "ChargedSpell")).count();
+    assert!(cast_count >= 2, "Should have cast twice with 2 charges, got {cast_count}");
+
+    // After 2 casts, charges should be depleted
+    assert_eq!(sim.units[0].abilities[0].charges.as_ref().unwrap().current_charges, 0,
+        "Charges should be depleted after 2 casts");
 }

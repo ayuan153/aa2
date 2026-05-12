@@ -4,6 +4,15 @@ use aa2_data::{AbilityDef, value_at_level};
 use crate::vec2::Vec2;
 use crate::TICK_DURATION;
 
+/// Charge-based ability state.
+#[derive(Debug, Clone)]
+pub struct ChargeState {
+    pub max_charges: u32,
+    pub current_charges: u32,
+    pub charge_cooldown: f32,
+    pub charge_timer: f32,
+}
+
 /// Runtime state for an equipped ability on a unit.
 #[derive(Debug, Clone)]
 pub struct AbilityState {
@@ -15,6 +24,31 @@ pub struct AbilityState {
     pub level: u8,
     /// Number of times this ability has been cast.
     pub casts: u32,
+    /// Charge state (if ability uses charges).
+    pub charges: Option<ChargeState>,
+}
+
+impl AbilityState {
+    /// Returns true if this ability is ready to cast (off cooldown or has charges).
+    pub fn is_ready(&self) -> bool {
+        if let Some(charges) = &self.charges {
+            charges.current_charges > 0
+        } else {
+            self.cooldown_remaining <= 0.0
+        }
+    }
+
+    /// Consume a use of this ability (decrement charge or start cooldown).
+    pub fn consume(&mut self) {
+        if let Some(charges) = &mut self.charges {
+            charges.current_charges -= 1;
+            if charges.charge_timer <= 0.0 {
+                charges.charge_timer = charges.charge_cooldown;
+            }
+        } else {
+            self.cooldown_remaining = value_at_level(&self.def.cooldown, self.level);
+        }
+    }
 }
 
 /// An in-progress cast on a unit.
@@ -33,7 +67,19 @@ pub struct CastInProgress {
 /// Tick all ability cooldowns on a unit, decrementing by TICK_DURATION.
 pub fn tick_cooldowns(abilities: &mut [AbilityState]) {
     for ability in abilities.iter_mut() {
-        if ability.cooldown_remaining > 0.0 {
+        if let Some(charges) = &mut ability.charges {
+            if charges.current_charges < charges.max_charges && charges.charge_timer > 0.0 {
+                charges.charge_timer -= TICK_DURATION;
+                if charges.charge_timer <= 0.0 {
+                    charges.current_charges += 1;
+                    if charges.current_charges < charges.max_charges {
+                        charges.charge_timer = charges.charge_cooldown;
+                    } else {
+                        charges.charge_timer = 0.0;
+                    }
+                }
+            }
+        } else if ability.cooldown_remaining > 0.0 {
             ability.cooldown_remaining = (ability.cooldown_remaining - TICK_DURATION).max(0.0);
         }
     }
@@ -91,7 +137,7 @@ mod tests {
             effects: vec![],
             description: String::new(),
             aoe_shape: None,
-            cast_range: 600.0,
+            cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
         }
     }
 
@@ -99,7 +145,7 @@ mod tests {
     fn test_cast_point_timing() {
         // 0.3s cast point at 30 ticks/sec = 9 ticks
         let ability_def = make_test_ability(0.3, 10.0, 100.0);
-        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0, casts: 0 }];
+        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0, casts: 0, charges: None }];
         let mut cast_state = Some(CastInProgress {
             ability_index: 0,
             target_id: None,
@@ -123,7 +169,7 @@ mod tests {
     #[test]
     fn test_mana_deduction() {
         let ability_def = make_test_ability(0.1, 10.0, 75.0);
-        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0, casts: 0 }];
+        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0, casts: 0, charges: None }];
         let mut cast_state = Some(CastInProgress {
             ability_index: 0,
             target_id: None,
@@ -152,7 +198,7 @@ mod tests {
     #[test]
     fn test_cast_interrupt() {
         let ability_def = make_test_ability(0.5, 10.0, 100.0);
-        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0, casts: 0 }];
+        let abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 0.0, level: 0, casts: 0, charges: None }];
         let mut cast_state = Some(CastInProgress {
             ability_index: 0,
             target_id: None,
@@ -183,7 +229,7 @@ mod tests {
     #[test]
     fn test_cooldown_tick() {
         let ability_def = make_test_ability(0.3, 1.0, 50.0);
-        let mut abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 1.0, level: 0, casts: 0 }];
+        let mut abilities = vec![AbilityState { def: ability_def, cooldown_remaining: 1.0, level: 0, casts: 0, charges: None }];
 
         // 1.0s cooldown at 30 ticks/sec = 30 ticks
         for i in 0..30 {

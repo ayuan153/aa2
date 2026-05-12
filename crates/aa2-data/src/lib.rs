@@ -1,5 +1,17 @@
 use serde::{Deserialize, Serialize};
 
+/// How the AI handles targeting for this ability.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub enum CastBehavior {
+    /// Won't walk into range. Only casts if a valid target is already in range.
+    Lazy,
+    /// Walks toward closest valid target until in cast range, then casts.
+    #[default]
+    Seek,
+    /// Walks toward closest valid target within cast_range + extra units.
+    SeekPlus(f32),
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Attribute {
     Strength,
@@ -97,6 +109,14 @@ pub enum Effect {
         steal_radius: f32,
         bounce_radius: Vec<f32>,
     },
+    /// Burrowstrike: line AoE stun + damage, caster teleports to end point.
+    Burrowstrike {
+        damage: Vec<f32>,
+        stun_duration: Vec<f32>,
+        range: Vec<f32>,
+        width: f32,
+        caster_teleports: bool,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -140,6 +160,12 @@ pub struct AbilityDef {
     /// Maximum range at which this ability can be cast.
     #[serde(default = "default_cast_range")]
     pub cast_range: f32,
+    /// How the AI handles targeting for this ability.
+    #[serde(default)]
+    pub cast_behavior: CastBehavior,
+    /// If set, ability uses a charge system instead of normal cooldown.
+    #[serde(default)]
+    pub max_charges: Option<u32>,
 }
 
 /// Default cast range for abilities (600 units).

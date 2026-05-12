@@ -114,6 +114,9 @@ pub fn execute_ability(
                 Effect::GlaivesOfWisdom { .. } => {
                     // Attack modifier — handled in the attack pipeline
                 }
+                Effect::Burrowstrike { .. } => {
+                    // Handled outside the per-target loop
+                }
             }
         }
     }
@@ -207,6 +210,58 @@ pub fn execute_ability(
                     delay_ticks_remaining: 0,
                 });
             }
+            Effect::Burrowstrike {
+                damage, stun_duration, range, width, caster_teleports,
+            } => {
+                let line_length = value_at_level(range, level);
+                let end_point = if let Some(tpos) = target_pos {
+                    let dir = (tpos - caster_pos).normalize();
+                    let dir = if dir.length() < 1e-6 { Vec2::new(1.0, 0.0) } else { dir };
+                    caster_pos + dir.scale(line_length)
+                } else {
+                    caster_pos + Vec2::new(line_length, 0.0)
+                };
+
+                let direction = (end_point - caster_pos).normalize();
+                let line_shape = aa2_data::AoeShape::Line { width: *width, length: line_length };
+                let hit_indices = find_aoe_targets(&line_shape, caster_pos, direction, units, caster_id, caster_team, true);
+
+                let dmg = value_at_level(damage, level);
+                let stun_secs = value_at_level(stun_duration, level);
+
+                for &idx in &hit_indices {
+                    let actual = apply_magic_resistance(dmg, units[idx].magic_resistance);
+                    units[idx].hp -= actual;
+                    events.push(CombatEvent::AbilityDamage {
+                        tick,
+                        caster_id,
+                        target_id: units[idx].id,
+                        ability_name: ability.name.clone(),
+                        damage: actual,
+                        damage_type: DamageType::Magical,
+                    });
+                    let stun_ticks = (stun_secs * 30.0) as u32;
+                    let stun_buff = Buff {
+                        name: "stun".to_string(),
+                        remaining_ticks: stun_ticks,
+                        tick_effect: None,
+                        stacking: StackBehavior::RefreshDuration,
+                        dispel_type: DispelType::StrongDispel,
+                        status: StatusFlags { stunned: true, ..StatusFlags::default() },
+                        stat_modifier: None,
+                        source_id: caster_id,
+                        is_debuff: true,
+                    };
+                    apply_buff(&mut units[idx].buffs, stun_buff);
+                }
+
+                // Teleport caster to end point
+                if *caster_teleports
+                    && let Some(caster) = units.iter_mut().find(|u| u.id == caster_id)
+                {
+                    caster.position = end_point;
+                }
+            }
             _ => {}
         }
     }
@@ -261,7 +316,7 @@ mod tests {
             effects,
             description: String::new(),
             aoe_shape: None,
-            cast_range: 600.0,
+            cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
         }
     }
 

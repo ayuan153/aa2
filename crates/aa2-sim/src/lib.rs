@@ -336,8 +336,7 @@ impl Simulation {
             match result {
                 CastTickResult::Completed { ability_index, mana_cost } => {
                     self.units[i].mana -= mana_cost;
-                    let level = self.units[i].abilities[ability_index].level;
-                    self.units[i].abilities[ability_index].cooldown_remaining = aa2_data::value_at_level(&self.units[i].abilities[ability_index].def.cooldown, level);
+                    self.units[i].abilities[ability_index].consume();
                     self.units[i].abilities[ability_index].casts += 1;
                     let ability_def = self.units[i].abilities[ability_index].def.clone();
                     let level = self.units[i].abilities[ability_index].level;
@@ -1239,11 +1238,12 @@ mod tests {
                 effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 600.0,
+                cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 0,
             casts: 0,
+            charges: None,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1273,11 +1273,12 @@ mod tests {
                 effects: vec![Effect::Damage { kind: DamageType::Physical, base: vec![200.0] }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 600.0,
+                cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 0,
             casts: 0,
+            charges: None,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1310,11 +1311,12 @@ mod tests {
                 effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 600.0,
+                cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 5.0, // on cooldown
             level: 0,
             casts: 0,
+            charges: None,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1348,11 +1350,12 @@ mod tests {
                 effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 600.0,
+                cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 0,
             casts: 0,
+            charges: None,
         });
 
         u0.buffs.push(Buff {
@@ -1392,6 +1395,8 @@ mod tests {
             description: String::new(),
             aoe_shape: None,
             cast_range: 600.0,
+            cast_behavior: aa2_data::CastBehavior::default(),
+            max_charges: None,
         };
         let ability2 = AbilityDef {
             name: "War Cry".to_string(),
@@ -1403,6 +1408,8 @@ mod tests {
             description: String::new(),
             aoe_shape: None,
             cast_range: 600.0,
+            cast_behavior: aa2_data::CastBehavior::default(),
+            max_charges: None,
         };
 
         let config = UnitConfig::new(hero)

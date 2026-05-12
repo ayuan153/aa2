@@ -446,12 +446,12 @@ mod tests {
                 }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 0.0,
+                cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 1,
             casts: 0,
-        };
+            charges: None,        };
 
         let mut attacker = make_test_unit(0, 0);
         attacker.abilities.push(ability);
@@ -498,12 +498,12 @@ mod tests {
                 }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 0.0,
+                cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 1,
             casts: 0,
-        });
+            charges: None,        });
         attacker.abilities.push(AbilityState {
             def: AbilityDef {
                 name: "Chaos Strike".to_string(),
@@ -519,12 +519,12 @@ mod tests {
                 }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 0.0,
+                cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 1,
             casts: 0,
-        });
+            charges: None,        });
 
         let target_id = 1;
         let base_damage = 50.0;
@@ -563,12 +563,12 @@ mod tests {
                 }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 0.0,
+                cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 1,
             casts: 0,
-        });
+            charges: None,        });
 
         let mut target = make_test_unit(1, 1);
         let base_damage = 50.0;
@@ -606,12 +606,12 @@ mod tests {
                 }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 0.0,
+                cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 1,
             casts: 0,
-        });
+            charges: None,        });
 
         post_attack_effects(&mut attacker, &mut target, 50.0, 0.0, 0);
 
@@ -684,12 +684,12 @@ mod tests {
                 }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 0.0,
+                cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 1,
             casts: 0,
-        });
+            charges: None,        });
 
         let result = process_attack_modifiers(&mut attacker, 1, 50.0, 0, &mut rng, None);
         // 80% of 40 INT = 32 bonus magical damage
@@ -724,12 +724,12 @@ mod tests {
                 }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 0.0,
+                cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 1,
             casts: 0,
-        });
+            charges: None,        });
 
         let result = process_attack_modifiers(&mut attacker, 1, 50.0, 0, &mut rng, None);
         // No mana = no bonus damage
@@ -785,12 +785,12 @@ mod tests {
                 }],
                 description: String::new(),
                 aoe_shape: None,
-                cast_range: 0.0,
+                cast_range: 0.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
             },
             cooldown_remaining: 0.0,
             level: 9,
             casts: 0,
-        });
+            charges: None,        });
 
         // Target at 100 units, secondary enemy at 200 units (within 500 of target)
         let target = Unit::from_hero_def(&hero, 1, 1, Vec2::new(100.0, 0.0));

@@ -84,7 +84,7 @@ fn test_io_instant_turn_rate_vs_slow_hero() {
         effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
         description: String::new(),
         aoe_shape: None,
-        cast_range: 600.0,
+        cast_range: 600.0, cast_behavior: aa2_data::CastBehavior::default(), max_charges: None,
     };
 
     // Io: instant turn rate (999.0)
@@ -98,11 +98,11 @@ fn test_io_instant_turn_rate_vs_slow_hero() {
     // This forces a ~180° turn before casting
     let mut io_unit = Unit::from_hero_def(&io_def, 0, 0, Vec2::new(0.0, 300.0));
     io_unit.facing = std::f32::consts::FRAC_PI_2; // facing up (+Y)
-    io_unit.abilities.push(AbilityState { def: ability.clone(), cooldown_remaining: 0.0, level: 1, casts: 0 });
+    io_unit.abilities.push(AbilityState { def: ability.clone(), cooldown_remaining: 0.0, level: 1, casts: 0, charges: None });
 
     let mut slow_unit = Unit::from_hero_def(&slow_def, 2, 0, Vec2::new(200.0, 300.0));
     slow_unit.facing = std::f32::consts::FRAC_PI_2; // facing up (+Y)
-    slow_unit.abilities.push(AbilityState { def: ability.clone(), cooldown_remaining: 0.0, level: 1, casts: 0 });
+    slow_unit.abilities.push(AbilityState { def: ability.clone(), cooldown_remaining: 0.0, level: 1, casts: 0, charges: None });
 
     // Enemy behind both heroes (at Y=0, within cast range 600)
     let enemy_def = io_def.clone();

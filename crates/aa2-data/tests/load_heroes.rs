@@ -39,3 +39,12 @@ fn load_glaives() {
     let ability = aa2_data::load_ability_def(Path::new("../../data/abilities/glaives_of_wisdom.ron")).unwrap();
     assert_eq!(ability.name, "Glaives of Wisdom");
 }
+
+#[test]
+fn load_burrowstrike() {
+    let ability = aa2_data::load_ability_def(Path::new("../../data/abilities/burrowstrike.ron")).unwrap();
+    assert_eq!(ability.name, "Burrowstrike");
+    assert_eq!(ability.cast_point, 0.0);
+    assert!(matches!(ability.cast_behavior, aa2_data::CastBehavior::Lazy));
+    assert_eq!(ability.max_charges, None);
+}

@@ -1,6 +1,6 @@
 //! Unit AI: ability casting decision logic.
 
-use aa2_data::{TargetType, value_at_level};
+use aa2_data::{CastBehavior, TargetType, value_at_level};
 use crate::buff::active_status;
 use crate::unit::Unit;
 use crate::vec2::Vec2;
@@ -22,7 +22,7 @@ pub fn try_find_cast(
         if matches!(ability.def.targeting, TargetType::Passive) {
             continue;
         }
-        if ability.cooldown_remaining > 0.0 {
+        if !ability.is_ready() {
             continue;
         }
         if unit.mana < value_at_level(&ability.def.mana_cost, ability.level) {
@@ -30,23 +30,28 @@ pub fn try_find_cast(
         }
 
         let cast_range = ability.def.cast_range;
+        let search_range = match &ability.def.cast_behavior {
+            CastBehavior::Lazy => cast_range,
+            CastBehavior::Seek => 9999.0,
+            CastBehavior::SeekPlus(extra) => cast_range + extra,
+        };
         match &ability.def.targeting {
             TargetType::SingleEnemy | TargetType::PointAoE => {
-                if let Some((id, pos)) = closest_living_enemy(unit, units, cast_range) {
+                if let Some((id, pos)) = closest_living_enemy(unit, units, search_range) {
                     let target_pos = Some(pos);
                     let target_id = Some(id);
                     return Some((i, target_id, target_pos));
                 }
             }
             TargetType::SingleAlly => {
-                if let Some((id, pos)) = closest_living_ally(unit, units, cast_range) {
+                if let Some((id, pos)) = closest_living_ally(unit, units, search_range) {
                     return Some((i, Some(id), Some(pos)));
                 }
             }
             TargetType::SingleAllyHG => {
                 let allies_in_range: Vec<_> = units.iter()
                     .filter(|u| u.id != unit.id && u.team == unit.team && u.is_alive())
-                    .filter(|u| unit.position.distance(u.position) <= cast_range)
+                    .filter(|u| unit.position.distance(u.position) <= search_range)
                     .collect();
 
                 if allies_in_range.is_empty() {

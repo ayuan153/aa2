@@ -300,3 +300,42 @@ Each tick processes in this order:
 6. Apply damage and effects
 7. Check deaths
 8. Check round end condition
+
+---
+
+## Cast Behavior (Targeting AI)
+
+How the AI decides whether to walk toward a target to cast an ability.
+
+| Behavior | Description | Example |
+|----------|-------------|---------|
+| `Lazy` | Only casts if a valid target is already within cast range. Will NOT walk toward targets. Falls through to auto-attack if nothing in range. | Burrowstrike |
+| `Seek` (default) | Walks toward the closest valid target until in cast range, then casts. Will cross the entire map if needed. | Most targeted abilities |
+| `SeekPlus(X)` | Walks toward the closest valid target within `cast_range + X` units. Won't chase beyond that. | Abilities with limited chase range |
+
+### AI Decision Flow (per tick)
+
+```
+1. Check each ability (in slot order):
+   a. Is it ready? (off cooldown OR has charges, enough mana, not silenced)
+   b. Find valid target within SEARCH RANGE:
+      - Lazy: search_range = cast_range
+      - Seek: search_range = unlimited
+      - SeekPlus(X): search_range = cast_range + X
+   c. If target found:
+      - If target within cast_range AND facing: begin cast
+      - If target within cast_range but not facing: turn toward target
+      - If target outside cast_range:
+        - Lazy: SKIP (fall through to next ability or auto-attack)
+        - Seek/SeekPlus: walk toward target
+2. If no ability ready/valid: auto-attack (existing targeting logic)
+```
+
+### Charges
+
+Some abilities use charges instead of a single cooldown:
+- Can cast as long as `current_charges > 0`
+- Each cast consumes 1 charge
+- Charges restore on a timer (one at a time)
+- Timer starts when charges < max
+- Example: Gaben Burrowstrike has 2 charges

@@ -243,11 +243,21 @@ impl Unit {
     pub fn from_config(config: &UnitConfig, id: u32, team: u8, position: Vec2) -> Self {
         let mut unit = Self::from_hero_def_at_level(&config.hero, id, team, position, config.level);
         for (ability_def, level) in &config.abilities {
+            let charges = ability_def.max_charges.map(|max| {
+                let cd = aa2_data::value_at_level(&ability_def.cooldown, *level);
+                crate::cast::ChargeState {
+                    max_charges: max,
+                    current_charges: max,
+                    charge_cooldown: cd,
+                    charge_timer: 0.0,
+                }
+            });
             unit.abilities.push(AbilityState {
                 def: ability_def.clone(),
                 cooldown_remaining: 0.0,
                 level: *level,
                 casts: 0,
+                charges,
             });
         }
         unit
