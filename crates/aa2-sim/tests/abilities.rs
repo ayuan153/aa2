@@ -1843,7 +1843,7 @@ fn test_burrowstrike_line_stun() {
             damage: vec![80.0],
             stun_duration: vec![1.2],
             range: vec![550.0],
-            width: 300.0,
+            width: 150.0,
             travel_speed: 2000.0,
             caustic_finale_damage: vec![0.0],
             caustic_finale_radius: 400.0,
@@ -1861,7 +1861,7 @@ fn test_burrowstrike_line_stun() {
     // Place enemies in a line
     let u1 = Unit::from_hero_def(&hero, 1, 1, Vec2::new(200.0, 0.0));
     let u2 = Unit::from_hero_def(&hero, 2, 1, Vec2::new(400.0, 0.0));
-    // Enemy off to the side (outside width)
+    // Enemy off to the side (outside 150 capsule radius)
     let u3 = Unit::from_hero_def(&hero, 3, 1, Vec2::new(200.0, 200.0));
 
     let hp_before_1 = u1.hp;
@@ -1870,24 +1870,31 @@ fn test_burrowstrike_line_stun() {
 
     let mut sim = Simulation::new(vec![u0, u1, u2, u3]);
 
-    // Travel time: 550 / 2000 = 0.275s = ~9 ticks. Run enough for cast + travel.
-    for _ in 0..20 {
+    // Wave speed 2000 u/s, range 550. Travel time = 0.275s = ~9 ticks.
+    // Unit at 200: wave hits at tick ~4, stun applied immediately (1.2s = 36 ticks).
+    // Check stun at tick 15 (well within stun duration).
+    for _ in 0..15 {
+        sim.step();
+    }
+
+    // Enemies in line should be stunned (wave has passed them by now)
+    let u1_stunned = aa2_sim::buff::active_status(&sim.units[1].buffs).stunned;
+    let u2_stunned = aa2_sim::buff::active_status(&sim.units[2].buffs).stunned;
+    assert!(u1_stunned, "Enemy 1 in line should be stunned");
+    assert!(u2_stunned, "Enemy 2 in line should be stunned");
+
+    // Enemy off to the side should NOT be stunned (200 > 150 capsule radius)
+    let u3_stunned = aa2_sim::buff::active_status(&sim.units[3].buffs).stunned;
+    assert!(!u3_stunned, "Enemy 3 off to the side should not be stunned");
+
+    // Continue to tick 40 so damage lands (0.52s delay = 16 ticks after hit)
+    for _ in 0..25 {
         sim.step();
     }
 
     // Check that enemies in line were damaged
     let dmg_events: Vec<_> = sim.combat_log.iter().filter(|e| matches!(e, CombatEvent::AbilityDamage { ability_name, .. } if ability_name == "Burrowstrike")).collect();
     assert!(dmg_events.len() >= 2, "Should hit at least 2 enemies in line, got {}", dmg_events.len());
-
-    // Enemies in line should be stunned
-    let u1_stunned = aa2_sim::buff::active_status(&sim.units[1].buffs).stunned;
-    let u2_stunned = aa2_sim::buff::active_status(&sim.units[2].buffs).stunned;
-    assert!(u1_stunned, "Enemy 1 in line should be stunned");
-    assert!(u2_stunned, "Enemy 2 in line should be stunned");
-
-    // Enemy off to the side should NOT be stunned
-    let u3_stunned = aa2_sim::buff::active_status(&sim.units[3].buffs).stunned;
-    assert!(!u3_stunned, "Enemy 3 off to the side should not be stunned");
 
     // Verify damage was dealt
     assert!(sim.units[1].hp < hp_before_1, "Enemy 1 should have taken damage");
@@ -1908,7 +1915,7 @@ fn test_burrowstrike_teleport() {
             damage: vec![80.0],
             stun_duration: vec![1.2],
             range: vec![550.0],
-            width: 300.0,
+            width: 150.0,
             travel_speed: 2000.0,
             caustic_finale_damage: vec![0.0],
             caustic_finale_radius: 400.0,

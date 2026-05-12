@@ -1,6 +1,8 @@
 // Burrowstrike - Sand King's line stun + travel
-// Caster travels underground at 2000 u/s, invulnerable during travel.
-// On arrival: line AoE stun + magical damage. Super+ applies Caustic Finale.
+// Wave travels at 2000 u/s along cast line. Units hit when wave reaches them (capsule shape, 150 radius).
+// On hit: 0.52s airborne (stunned) then damage lands. Stun duration INCLUDES the 0.52s airborne.
+// Caster travels with wave, invulnerable during travel.
+// Super+ applies Caustic Finale (4.5s debuff, explodes on death: flat + 8.5% max HP).
 //
 // AA Scaling: L1-3 = Dota L1-3, L4-5 = L3, L6 (Super), L7-8 = L6, L9 (Gaben)
 // Super (6): +0.3s stun, +650 range, applies Caustic Finale
@@ -18,7 +20,7 @@ AbilityDef(
             damage: [80.0, 150.0, 290.0, 290.0, 290.0, 290.0, 290.0, 290.0, 290.0],
             stun_duration: [1.2, 1.4, 1.8, 1.8, 1.8, 2.1, 2.1, 2.1, 2.1],
             range: [550.0, 625.0, 775.0, 775.0, 775.0, 1425.0, 1425.0, 1425.0, 1425.0],
-            width: 300.0,
+            width: 150.0,
             travel_speed: 2000.0,
             caustic_finale_damage: [0.0, 0.0, 0.0, 0.0, 0.0, 150.0, 150.0, 150.0, 150.0],
             caustic_finale_radius: 400.0,

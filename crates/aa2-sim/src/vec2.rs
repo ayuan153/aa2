@@ -69,3 +69,15 @@ impl Vec2 {
         self.x * other.x + self.y * other.y
     }
 }
+
+/// Distance from a point to the nearest point on a line segment.
+pub fn point_to_segment_distance(point: Vec2, seg_start: Vec2, seg_end: Vec2) -> f32 {
+    let seg = seg_end - seg_start;
+    let len_sq = seg.x * seg.x + seg.y * seg.y;
+    if len_sq < 0.0001 {
+        return point.distance(seg_start);
+    }
+    let t = ((point - seg_start).dot(seg) / len_sq).clamp(0.0, 1.0);
+    let projection = Vec2::new(seg_start.x + t * seg.x, seg_start.y + t * seg.y);
+    point.distance(projection)
+}

@@ -6,16 +6,22 @@ use crate::vec2::Vec2;
 /// The kind of pending effect currently active.
 #[derive(Debug, Clone)]
 pub enum PendingEffectKind {
-    /// Burrowstrike: caster travels to end point, then applies damage/stun in line.
+    /// Burrowstrike: wave travels at speed, hitting units as it reaches them (capsule shape).
     BurrowstrikeTravel {
         start_pos: Vec2,
         end_pos: Vec2,
         travel_speed: f32,
+        current_distance: f32,
+        max_distance: f32,
+        width: f32,
         damage: f32,
         stun_duration_secs: f32,
-        width: f32,
         caustic_finale_damage: f32,
         caustic_finale_radius: f32,
+        caustic_finale_duration_secs: f32,
+        already_hit: Vec<u32>,
+        /// Pending damage: (unit_id, ticks_remaining, damage_amount)
+        pending_damage: Vec<(u32, u32, f32)>,
     },
     /// Dark Pact: pulsing AoE damage + self-damage + self-dispel.
     DarkPactPulse {
