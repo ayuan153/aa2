@@ -5,7 +5,7 @@
 //! base damage roll and armor reduction.
 
 use aa2_data::{Effect, value_at_level};
-use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier};
+use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags, StatModifier, active_status};
 use crate::unit::Unit;
 use crate::TICK_RATE;
 
@@ -246,6 +246,67 @@ pub fn post_attack_effects(
                         pierces_magic_immunity: true,
                     };
                     target.buffs.push(debuff);
+                }
+            }
+        }
+    }
+
+    // Glaives of Wisdom per-attack INT steal
+    // Only applies if target is NOT magic immune (already checked at process_attack_modifiers level via glaives_active)
+    let target_magic_immune = active_status(&target.buffs).magic_immune;
+    if !target_magic_immune {
+        let ability_count = attacker.abilities.len();
+        for ai in 0..ability_count {
+            let level = attacker.abilities[ai].level;
+            if level == 0 { continue; }
+            let effects = attacker.abilities[ai].def.effects.clone();
+            for effect in &effects {
+                if let Effect::GlaivesOfWisdom { int_steal_per_attack, steal_duration, mana_cost, .. } = effect {
+                    let steal = value_at_level(int_steal_per_attack, level);
+                    if steal <= 0.0 { continue; }
+                    // Check mana (same cost as the damage portion)
+                    let cost = value_at_level(mana_cost, level);
+                    if attacker.mana < cost { continue; }
+                    // Note: mana already deducted in process_attack_modifiers
+
+                    let dur_secs = value_at_level(steal_duration, level);
+                    let dur_ticks = (dur_secs * TICK_RATE) as u32;
+
+                    // Debuff on target: lose INT (undispellable, does not pierce immunity)
+                    let debuff = Buff {
+                        name: "glaives_int_debuff".to_string(),
+                        remaining_ticks: dur_ticks,
+                        tick_effect: None,
+                        stacking: StackBehavior::Independent,
+                        dispel_type: DispelType::Undispellable,
+                        status: StatusFlags::default(),
+                        stat_modifier: Some(StatModifier {
+                            bonus_int: -steal,
+                            ..StatModifier::default()
+                        }),
+                        source_id: attacker.id,
+                        is_debuff: true,
+                        pierces_magic_immunity: false,
+                    };
+                    target.buffs.push(debuff);
+
+                    // Buff on attacker: gain INT (undispellable)
+                    let buff = Buff {
+                        name: "glaives_int_buff".to_string(),
+                        remaining_ticks: dur_ticks,
+                        tick_effect: None,
+                        stacking: StackBehavior::Independent,
+                        dispel_type: DispelType::Undispellable,
+                        status: StatusFlags::default(),
+                        stat_modifier: Some(StatModifier {
+                            bonus_int: steal,
+                            ..StatModifier::default()
+                        }),
+                        source_id: attacker.id,
+                        is_debuff: false,
+                        pierces_magic_immunity: false,
+                    };
+                    attacker.buffs.push(buff);
                 }
             }
         }
@@ -682,8 +743,10 @@ mod tests {
                 cast_point: 0.0,
                 targeting: TargetType::Passive,
                 effects: vec![Effect::GlaivesOfWisdom {
-                    int_damage_factor: vec![0.8], // 80% of INT
+                    int_damage_factor: vec![0.8],
                     mana_cost: vec![15.0],
+                    int_steal_per_attack: vec![2.0],
+                    steal_duration: vec![10.0],
                     steal_int_on_kill: vec![0.0],
                     steal_radius: 900.0,
                     bounce_radius: vec![0.0],
@@ -724,6 +787,8 @@ mod tests {
                 effects: vec![Effect::GlaivesOfWisdom {
                     int_damage_factor: vec![0.8],
                     mana_cost: vec![15.0],
+                    int_steal_per_attack: vec![2.0],
+                    steal_duration: vec![10.0],
                     steal_int_on_kill: vec![0.0],
                     steal_radius: 900.0,
                     bounce_radius: vec![0.0],
@@ -783,8 +848,10 @@ mod tests {
                 cast_point: 0.0,
                 targeting: TargetType::Passive,
                 effects: vec![Effect::GlaivesOfWisdom {
-                    int_damage_factor: vec![1.0], // 100% INT
+                    int_damage_factor: vec![1.0],
                     mana_cost: vec![15.0],
+                    int_steal_per_attack: vec![2.0],
+                    steal_duration: vec![10.0],
                     steal_int_on_kill: vec![0.0],
                     steal_radius: 900.0,
                     bounce_radius: vec![500.0], // Gaben bounce

@@ -105,7 +105,9 @@ pub enum Effect {
     GlaivesOfWisdom {
         int_damage_factor: Vec<f32>,
         mana_cost: Vec<f32>,
-        steal_int_on_kill: Vec<f32>,
+        int_steal_per_attack: Vec<f32>,  // INT stolen per hit (2/3/5)
+        steal_duration: Vec<f32>,         // duration of temp steal in seconds (10/20/40)
+        steal_int_on_kill: Vec<f32>,      // permanent INT on kill (0 base, 1 at Super)
         steal_radius: f32,
         bounce_radius: Vec<f32>,
     },

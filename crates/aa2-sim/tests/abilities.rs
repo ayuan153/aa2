@@ -1611,6 +1611,8 @@ fn test_glaives_bounce_applies_modifiers() {
             targeting: TargetType::Passive,
             effects: vec![Effect::GlaivesOfWisdom {
                 int_damage_factor: vec![1.0],
+                int_steal_per_attack: vec![2.0],
+                steal_duration: vec![10.0],
                 mana_cost: vec![15.0],
                 steal_int_on_kill: vec![0.0],
                 steal_radius: 900.0,
@@ -1710,6 +1712,8 @@ fn test_glaives_bounce_50_percent_physical() {
             targeting: TargetType::Passive,
             effects: vec![Effect::GlaivesOfWisdom {
                 int_damage_factor: vec![1.0],
+                int_steal_per_attack: vec![2.0],
+                steal_duration: vec![10.0],
                 mana_cost: vec![15.0],
                 steal_int_on_kill: vec![0.0],
                 steal_radius: 900.0,
@@ -2183,6 +2187,8 @@ fn test_glaives_blocked_by_magic_immunity() {
         targeting: TargetType::Passive,
         effects: vec![Effect::GlaivesOfWisdom {
             int_damage_factor: vec![0.8],
+                int_steal_per_attack: vec![2.0],
+                steal_duration: vec![10.0],
             mana_cost: vec![15.0],
             steal_int_on_kill: vec![0.0],
             steal_radius: 900.0,

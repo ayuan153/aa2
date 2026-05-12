@@ -17,7 +17,11 @@ AbilityDef(
             int_damage_factor: [0.35, 0.50, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80],
             // Mana cost per attack (flat 15 at all levels in AA)
             mana_cost: [15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0],
-            // INT stolen on kill: 0 at base, 1 at Super+
+            // INT stolen per attack (temporary): L1=2, L2=3, L3=5, L4-5=5, L6-8=5, L9=5
+            int_steal_per_attack: [2.0, 3.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+            // Steal duration (seconds): L1=10, L2=20, L3=40, L4-5=40, L6-8=40, L9=40
+            steal_duration: [10.0, 20.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0],
+            // Permanent INT stolen on kill: 0 at base, 1 at Super+
             steal_int_on_kill: [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
             // Kill-steal radius
             steal_radius: 900.0,
