@@ -190,6 +190,7 @@ pub fn post_attack_effects(
                     }),
                     source_id: attacker.id,
                     is_debuff: true,
+                    pierces_magic_immunity: true,
                 };
                 target.buffs.push(debuff);
 
@@ -207,6 +208,7 @@ pub fn post_attack_effects(
                     }),
                     source_id: attacker.id,
                     is_debuff: false,
+                    pierces_magic_immunity: false,
                 };
                 attacker.buffs.push(buff);
             }
@@ -238,6 +240,7 @@ pub fn post_attack_effects(
                         }),
                         source_id: attacker.id,
                         is_debuff: true,
+                        pierces_magic_immunity: true,
                     };
                     target.buffs.push(debuff);
                 }

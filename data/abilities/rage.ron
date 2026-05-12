@@ -1,0 +1,22 @@
+// Rage - Lifestealer's magic immunity self-buff
+// Grants magic immunity for the duration. Applies basic dispel on cast.
+// Cannot be dispelled (only expires or removed by death).
+//
+// AA Scaling: L1=1s, L2=2s, L3=4s, L4-5=4s, L6(Super)=7s, L7-8=7s, L9(Gaben)=7s
+// Cooldown: 18 base, Gaben: 8 (-10)
+// Mana cost: 80
+AbilityDef(
+    name: "Rage",
+    cooldown: [18.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0, 8.0],
+    mana_cost: [80.0],
+    cast_point: 0.0,
+    targeting: NoTarget,
+    effects: [
+        Rage(
+            duration: [1.0, 2.0, 4.0, 4.0, 4.0, 7.0, 7.0, 7.0, 7.0],
+        ),
+    ],
+    description: "Lifestealer goes into a rage, becoming magic immune and purging debuffs.",
+    aoe_shape: None,
+    cast_range: 0.0,
+)

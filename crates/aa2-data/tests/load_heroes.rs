@@ -48,3 +48,11 @@ fn load_burrowstrike() {
     assert!(matches!(ability.cast_behavior, aa2_data::CastBehavior::Lazy));
     assert_eq!(ability.max_charges, None);
 }
+
+#[test]
+fn load_rage() {
+    let ability = aa2_data::load_ability_def(Path::new("../../data/abilities/rage.ron")).unwrap();
+    assert_eq!(ability.name, "Rage");
+    assert_eq!(ability.cast_point, 0.0);
+    assert!(matches!(ability.targeting, aa2_data::TargetType::NoTarget));
+}

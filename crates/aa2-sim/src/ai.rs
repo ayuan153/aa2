@@ -92,6 +92,7 @@ fn closest_living_enemy(unit: &Unit, units: &[Unit], range: f32) -> Option<(u32,
         .iter()
         .filter(|u| u.team != unit.team && u.is_alive())
         .filter(|u| !active_status(&u.buffs).invulnerable)
+        .filter(|u| !active_status(&u.buffs).magic_immune)
         .filter_map(|u| {
             let d = unit.position.distance(u.position);
             (d <= range).then_some((d, u.id, u.position))

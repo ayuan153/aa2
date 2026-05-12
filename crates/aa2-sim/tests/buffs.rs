@@ -62,6 +62,7 @@ fn test_str_buff_heals_on_apply_preserves_on_expiry() {
         stat_modifier: Some(StatModifier { bonus_strength: 28.0, ..StatModifier::default() }),
         source_id: 0,
         is_debuff: false,
+        pierces_magic_immunity: false,
     });
 
     let mut sim = Simulation::new(vec![unit, dummy]);
@@ -117,6 +118,7 @@ fn test_str_buff_heals_on_apply_preserves_on_expiry() {
         stat_modifier: Some(StatModifier { bonus_strength: 28.0, ..StatModifier::default() }),
         source_id: 0,
         is_debuff: false,
+        pierces_magic_immunity: false,
     });
 
     let mut sim2 = Simulation::new(vec![unit2, dummy2]);

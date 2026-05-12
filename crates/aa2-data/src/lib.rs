@@ -120,6 +120,10 @@ pub enum Effect {
         caustic_finale_damage: Vec<f32>, // on-death explosion damage (0 = none, >0 at Super+)
         caustic_finale_radius: f32,      // explosion radius (400)
     },
+    /// Rage: self-buff granting magic immunity + basic dispel on cast.
+    Rage {
+        duration: Vec<f32>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

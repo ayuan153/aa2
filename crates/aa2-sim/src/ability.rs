@@ -2,7 +2,7 @@
 
 use aa2_data::{AbilityDef, DamageType, Effect, TargetType};
 use crate::aoe::find_aoe_targets;
-use crate::buff::{apply_buff, Buff, DispelType, StackBehavior, StatModifier, StatusFlags};
+use crate::buff::{active_status, apply_buff, Buff, DispelType, StackBehavior, StatModifier, StatusFlags};
 use crate::combat::{apply_armor, apply_magic_resistance};
 use crate::pending::{PendingEffect, PendingEffectKind};
 use crate::unit::Unit;
@@ -61,18 +61,26 @@ pub fn execute_ability(
                     let raw = value_at_level(base, level);
                     let actual = match kind {
                         DamageType::Physical => apply_armor(raw, units[idx].armor),
-                        DamageType::Magical => apply_magic_resistance(raw, units[idx].magic_resistance),
+                        DamageType::Magical => {
+                            if active_status(&units[idx].buffs).magic_immune {
+                                0.0
+                            } else {
+                                apply_magic_resistance(raw, units[idx].magic_resistance)
+                            }
+                        }
                         DamageType::Pure => raw,
                     };
-                    units[idx].hp -= actual;
-                    events.push(CombatEvent::AbilityDamage {
-                        tick,
-                        caster_id,
-                        target_id: units[idx].id,
-                        ability_name: ability.name.clone(),
-                        damage: actual,
-                        damage_type: kind.clone(),
-                    });
+                    if actual > 0.0 {
+                        units[idx].hp -= actual;
+                        events.push(CombatEvent::AbilityDamage {
+                            tick,
+                            caster_id,
+                            target_id: units[idx].id,
+                            ability_name: ability.name.clone(),
+                            damage: actual,
+                            damage_type: kind.clone(),
+                        });
+                    }
                 }
                 Effect::Heal { base } => {
                     let raw = value_at_level(base, level);
@@ -86,6 +94,11 @@ pub fn execute_ability(
                     });
                 }
                 Effect::ApplyBuff { name, duration } => {
+                    let is_debuff = units[idx].team != caster_team;
+                    // Skip non-piercing debuffs on magic immune units
+                    if is_debuff && active_status(&units[idx].buffs).magic_immune {
+                        continue;
+                    }
                     let buff = Buff {
                         name: name.clone(),
                         remaining_ticks: (*duration * 30.0) as u32,
@@ -95,7 +108,8 @@ pub fn execute_ability(
                         status: StatusFlags::default(),
                         stat_modifier: None,
                         source_id: caster_id,
-                        is_debuff: units[idx].team != caster_team,
+                        is_debuff,
+                        pierces_magic_immunity: false,
                     };
                     apply_buff(&mut units[idx].buffs, buff);
                     events.push(CombatEvent::BuffApplied {
@@ -115,6 +129,9 @@ pub fn execute_ability(
                     // Attack modifier — handled in the attack pipeline
                 }
                 Effect::Burrowstrike { .. } => {
+                    // Handled outside the per-target loop
+                }
+                Effect::Rage { .. } => {
                     // Handled outside the per-target loop
                 }
             }
@@ -169,6 +186,7 @@ pub fn execute_ability(
                     stat_modifier: Some(modifier.clone()),
                     source_id: caster_id,
                     is_debuff: false,
+                    pierces_magic_immunity: false,
                 };
                 // Apply to target
                 if let Some(tid) = target_id
@@ -238,6 +256,7 @@ pub fn execute_ability(
                         stat_modifier: None,
                         source_id: caster_id,
                         is_debuff: false,
+                        pierces_magic_immunity: false,
                     };
                     apply_buff(&mut caster.buffs, invuln_buff);
                 }
@@ -265,6 +284,28 @@ pub fn execute_ability(
                     },
                     delay_ticks_remaining: 0,
                 });
+            }
+            Effect::Rage { duration } => {
+                if let Some(caster) = units.iter_mut().find(|u| u.id == caster_id) {
+                    // Basic dispel on cast
+                    crate::buff::dispel(&mut caster.buffs, DispelType::BasicDispel);
+                    // Apply magic immunity buff
+                    let dur_ticks = (value_at_level(duration, level) * 30.0) as u32;
+                    let rage_buff = Buff {
+                        name: "rage".to_string(),
+                        remaining_ticks: dur_ticks,
+                        tick_effect: None,
+                        stacking: StackBehavior::RefreshDuration,
+                        dispel_type: DispelType::Undispellable,
+                        status: StatusFlags { magic_immune: true, ..StatusFlags::default() },
+                        stat_modifier: None,
+                        source_id: caster_id,
+                        is_debuff: false,
+                        pierces_magic_immunity: false,
+                    };
+                    apply_buff(&mut caster.buffs, rage_buff);
+                    events.push(CombatEvent::BuffApplied { tick, target_id: caster_id, name: "rage".to_string() });
+                }
             }
             _ => {}
         }
@@ -427,5 +468,220 @@ mod tests {
         assert_eq!(units[1].buffs[0].name, "slow");
         assert_eq!(units[1].buffs[0].remaining_ticks, 90); // 3.0 * 30
         assert!(matches!(&events[0], CombatEvent::BuffApplied { name, .. } if name == "slow"));
+    }
+
+    #[test]
+    fn test_rage_blocks_magical_damage() {
+        let def = make_test_hero();
+        let mut units = vec![
+            Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0)),
+            Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0)),
+        ];
+        // Give unit 1 magic immunity
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags};
+        units[1].buffs.push(Buff {
+            name: "rage".to_string(),
+            remaining_ticks: 90,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::Undispellable,
+            status: StatusFlags { magic_immune: true, ..StatusFlags::default() },
+            stat_modifier: None,
+            source_id: 1,
+            is_debuff: false,
+            pierces_magic_immunity: false,
+        });
+
+        let hp_before = units[1].hp;
+        let ability = make_ability(vec![Effect::Damage {
+            kind: DamageType::Magical,
+            base: vec![200.0],
+        }]);
+        execute_ability(&ability, 1, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10, &mut Vec::new());
+        // Magic immune unit takes 0 magical damage
+        assert!((units[1].hp - hp_before).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_rage_allows_physical_damage() {
+        let def = make_test_hero();
+        let mut units = vec![
+            Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0)),
+            Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0)),
+        ];
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags};
+        units[1].buffs.push(Buff {
+            name: "rage".to_string(),
+            remaining_ticks: 90,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::Undispellable,
+            status: StatusFlags { magic_immune: true, ..StatusFlags::default() },
+            stat_modifier: None,
+            source_id: 1,
+            is_debuff: false,
+            pierces_magic_immunity: false,
+        });
+
+        let hp_before = units[1].hp;
+        let ability = make_ability(vec![Effect::Damage {
+            kind: DamageType::Physical,
+            base: vec![100.0],
+        }]);
+        execute_ability(&ability, 1, 0, 0, Vec2::new(0.0, 0.0), Some(1), None, &mut units, 10, &mut Vec::new());
+        // Physical damage still applies
+        assert!(units[1].hp < hp_before);
+    }
+
+    #[test]
+    fn test_rage_prevents_spell_targeting() {
+        use crate::ai::try_find_cast;
+        use crate::cast::AbilityState;
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags};
+
+        let def = make_test_hero();
+        let mut u0 = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let mut u1 = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
+
+        u0.abilities.push(AbilityState {
+            def: AbilityDef {
+                name: "Fireball".to_string(),
+                cooldown: vec![10.0],
+                mana_cost: vec![50.0],
+                cast_point: 0.3,
+                targeting: TargetType::SingleEnemy,
+                effects: vec![Effect::Damage { kind: DamageType::Magical, base: vec![100.0] }],
+                description: String::new(),
+                aoe_shape: None,
+                cast_range: 600.0,
+                cast_behavior: aa2_data::CastBehavior::default(),
+                max_charges: None,
+            },
+            cooldown_remaining: 0.0,
+            level: 1,
+            casts: 0,
+            charges: None,
+        });
+
+        // Make target magic immune
+        u1.buffs.push(Buff {
+            name: "rage".to_string(),
+            remaining_ticks: 90,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::Undispellable,
+            status: StatusFlags { magic_immune: true, ..StatusFlags::default() },
+            stat_modifier: None,
+            source_id: 1,
+            is_debuff: false,
+            pierces_magic_immunity: false,
+        });
+
+        let units = vec![u0.clone(), u1];
+        let result = try_find_cast(&units[0], &units);
+        // AI should not find a target (magic immune)
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_rage_dispels_on_cast() {
+        let def = make_test_hero();
+        let mut units = vec![
+            Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0)),
+            Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0)),
+        ];
+        // Apply a debuff to caster
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags};
+        units[0].buffs.push(Buff {
+            name: "slow".to_string(),
+            remaining_ticks: 90,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::BasicDispel,
+            status: StatusFlags::default(),
+            stat_modifier: None,
+            source_id: 1,
+            is_debuff: true,
+            pierces_magic_immunity: false,
+        });
+        assert_eq!(units[0].buffs.len(), 1);
+
+        let ability = AbilityDef {
+            name: "Rage".to_string(),
+            cooldown: vec![18.0],
+            mana_cost: vec![80.0],
+            cast_point: 0.0,
+            targeting: TargetType::NoTarget,
+            effects: vec![Effect::Rage { duration: vec![4.0] }],
+            description: String::new(),
+            aoe_shape: None,
+            cast_range: 0.0,
+            cast_behavior: aa2_data::CastBehavior::default(),
+            max_charges: None,
+        };
+        execute_ability(&ability, 1, 0, 0, Vec2::new(0.0, 0.0), None, None, &mut units, 10, &mut Vec::new());
+
+        // Debuff should be dispelled, rage buff should be applied
+        assert_eq!(units[0].buffs.len(), 1);
+        assert_eq!(units[0].buffs[0].name, "rage");
+        assert!(active_status(&units[0].buffs).magic_immune);
+    }
+
+    #[test]
+    fn test_essence_shift_pierces_rage() {
+        use crate::attack_modifier::post_attack_effects;
+        use crate::cast::AbilityState;
+        use crate::buff::{Buff, StackBehavior, DispelType, StatusFlags};
+
+        let def = make_test_hero();
+        let mut attacker = Unit::from_hero_def(&def, 0, 0, Vec2::new(0.0, 0.0));
+        let mut target = Unit::from_hero_def(&def, 1, 1, Vec2::new(100.0, 0.0));
+
+        // Give target magic immunity
+        target.buffs.push(Buff {
+            name: "rage".to_string(),
+            remaining_ticks: 90,
+            tick_effect: None,
+            stacking: StackBehavior::RefreshDuration,
+            dispel_type: DispelType::Undispellable,
+            status: StatusFlags { magic_immune: true, ..StatusFlags::default() },
+            stat_modifier: None,
+            source_id: 1,
+            is_debuff: false,
+            pierces_magic_immunity: false,
+        });
+
+        attacker.abilities.push(AbilityState {
+            def: AbilityDef {
+                name: "Essence Shift".to_string(),
+                cooldown: vec![0.0],
+                mana_cost: vec![0.0],
+                cast_point: 0.0,
+                targeting: TargetType::Passive,
+                effects: vec![Effect::EssenceShift {
+                    str_steal: vec![1.0],
+                    agi_steal: vec![1.0],
+                    int_steal: vec![1.0],
+                    agi_gain: vec![3.0],
+                    duration: vec![30.0],
+                }],
+                description: String::new(),
+                aoe_shape: None,
+                cast_range: 0.0,
+                cast_behavior: aa2_data::CastBehavior::default(),
+                max_charges: None,
+            },
+            cooldown_remaining: 0.0,
+            level: 1,
+            casts: 0,
+            charges: None,
+        });
+
+        post_attack_effects(&mut attacker, &mut target, 50.0, 0.0, 0);
+
+        // ES debuff should still apply (pierces magic immunity)
+        let es_debuffs: Vec<_> = target.buffs.iter().filter(|b| b.name == "essence_shift_debuff").collect();
+        assert_eq!(es_debuffs.len(), 1);
+        assert!(es_debuffs[0].pierces_magic_immunity);
     }
 }

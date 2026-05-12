@@ -484,7 +484,8 @@ impl Simulation {
                     if is_melee {
                         self.units[target_idx].hp -= actual_dmg;
                         // Glaives bonus magical damage (separate from physical)
-                        let magic_dmg = if atk_result.bonus_magical_damage > 0.0 {
+                        let magic_dmg = if atk_result.bonus_magical_damage > 0.0
+                            && !active_status(&self.units[target_idx].buffs).magic_immune {
                             combat::apply_magic_resistance(atk_result.bonus_magical_damage, self.units[target_idx].magic_resistance)
                         } else { 0.0 };
                         self.units[target_idx].hp -= magic_dmg;
@@ -630,7 +631,8 @@ impl Simulation {
                 let actual_dmg = apply_armor(proj.damage - blocked, armor);
                 self.units[target_idx].hp -= actual_dmg;
                 // Glaives bonus magical damage
-                let magic_dmg = if proj.bonus_magical_damage > 0.0 {
+                let magic_dmg = if proj.bonus_magical_damage > 0.0
+                    && !active_status(&self.units[target_idx].buffs).magic_immune {
                     combat::apply_magic_resistance(proj.bonus_magical_damage, self.units[target_idx].magic_resistance)
                 } else { 0.0 };
                 self.units[target_idx].hp -= magic_dmg;
@@ -755,6 +757,10 @@ impl Simulation {
                         // Capsule check: distance from unit to segment [start_pos, wave_front]
                         if point_to_segment_distance(u.position, sp, wave_front) <= w {
                             already_hit.push(u.id);
+                            // Skip stun and damage on magic immune units
+                            if active_status(&u.buffs).magic_immune {
+                                continue;
+                            }
                             // Apply stun immediately (full duration includes 0.52s airborne)
                             let stun_ticks = (stun_secs * 30.0) as u32;
                             let stun_buff = Buff {
@@ -767,6 +773,7 @@ impl Simulation {
                                 stat_modifier: None,
                                 source_id: caster_id,
                                 is_debuff: true,
+                                pierces_magic_immunity: false,
                             };
                             apply_buff(&mut u.buffs, stun_buff);
                             // Schedule damage after 0.52s (16 ticks)
@@ -784,6 +791,7 @@ impl Simulation {
                                     stat_modifier: None,
                                     source_id: caster_id,
                                     is_debuff: true,
+                                    pierces_magic_immunity: false,
                                 };
                                 apply_buff(&mut u.buffs, cf_buff);
                             }
@@ -881,12 +889,17 @@ impl Simulation {
                         }
                         if caster_pos.distance(u.position) <= r {
                             let actual = match &dt {
-                                DamageType::Magical => apply_magic_resistance(dmg, u.magic_resistance),
+                                DamageType::Magical => {
+                                    if active_status(&u.buffs).magic_immune { 0.0 }
+                                    else { apply_magic_resistance(dmg, u.magic_resistance) }
+                                }
                                 DamageType::Physical => combat::apply_armor(dmg, u.armor),
                                 DamageType::Pure => dmg,
                             };
-                            u.hp -= actual;
-                            enemies_hit += 1;
+                            if actual > 0.0 {
+                                u.hp -= actual;
+                                enemies_hit += 1;
+                            }
                         }
                     }
 
@@ -940,6 +953,11 @@ impl Simulation {
                             continue;
                         }
                         if orig.distance(u.position) <= cr {
+                            already_hit.push(u.id);
+                            // Skip magical damage and stun on magic immune units
+                            if active_status(&u.buffs).magic_immune {
+                                continue;
+                            }
                             let actual = apply_magic_resistance(dmg, u.magic_resistance);
                             u.hp -= actual;
                             let base_ticks = (stun_secs * 30.0) as u32;
@@ -958,9 +976,9 @@ impl Simulation {
                                 stat_modifier: None,
                                 source_id: caster_id,
                                 is_debuff: true,
+                                pierces_magic_immunity: false,
                             };
                             apply_buff(&mut u.buffs, stun_buff);
-                            already_hit.push(u.id);
                             events.push(CombatEvent::WaveHit {
                                 tick,
                                 target_id: u.id,
@@ -1380,6 +1398,7 @@ mod tests {
             stat_modifier: None,
             source_id: 1,
             is_debuff: true,
+            pierces_magic_immunity: false,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1551,6 +1570,7 @@ mod tests {
             stat_modifier: None,
             source_id: 1,
             is_debuff: true,
+            pierces_magic_immunity: false,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1647,6 +1667,7 @@ mod tests {
             stat_modifier: Some(StatModifier { bonus_strength: 20.0, ..StatModifier::default() }),
             source_id: 0,
             is_debuff: false,
+            pierces_magic_immunity: false,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1677,6 +1698,7 @@ mod tests {
             stat_modifier: Some(StatModifier { bonus_strength: 20.0, ..StatModifier::default() }),
             source_id: 0,
             is_debuff: false,
+            pierces_magic_immunity: false,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1710,6 +1732,7 @@ mod tests {
             stat_modifier: Some(StatModifier { bonus_strength: 20.0, ..StatModifier::default() }),
             source_id: 0,
             is_debuff: false,
+            pierces_magic_immunity: false,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1741,6 +1764,7 @@ mod tests {
             stat_modifier: Some(StatModifier { bonus_strength: 20.0, ..StatModifier::default() }),
             source_id: 0,
             is_debuff: false,
+            pierces_magic_immunity: false,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);
@@ -1778,6 +1802,7 @@ mod tests {
             stat_modifier: Some(StatModifier { bonus_hp_regen: 30.0, ..StatModifier::default() }),
             source_id: 0,
             is_debuff: false,
+            pierces_magic_immunity: false,
         });
 
         let mut sim = Simulation::new(vec![u0, u1]);

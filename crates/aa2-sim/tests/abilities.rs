@@ -261,6 +261,7 @@ fn test_dark_pact_dispel() {
         stat_modifier: None,
         source_id: 1,
         is_debuff: true,
+            pierces_magic_immunity: false,
     });
 
     assert!(sim.units[0].buffs.iter().any(|b| b.name == "test_stun"));
@@ -528,6 +529,7 @@ fn test_hg_dispels_on_cast() {
         stat_modifier: None,
         source_id: 99,
         is_debuff: true,
+            pierces_magic_immunity: false,
     });
 
     let mut units = vec![u0, u1];
@@ -1347,6 +1349,7 @@ fn test_essence_shift_stats_floor_at_one() {
             }),
             source_id: 0,
             is_debuff: true,
+            pierces_magic_immunity: false,
         });
     }
 
@@ -1374,6 +1377,7 @@ fn test_essence_shift_stats_floor_at_one() {
             }),
             source_id: 0,
             is_debuff: false,
+            pierces_magic_immunity: false,
         });
     }
 
@@ -1411,6 +1415,7 @@ fn test_hg_protects_base_from_es() {
         }),
         source_id: 0,
         is_debuff: false,
+            pierces_magic_immunity: false,
     });
 
     // 30 ES debuffs: -1 STR each
@@ -1430,6 +1435,7 @@ fn test_hg_protects_base_from_es() {
             }),
             source_id: 1,
             is_debuff: true,
+            pierces_magic_immunity: false,
         });
     }
 
@@ -1500,6 +1506,7 @@ fn test_agi_hero_damage_increases_with_es_buff() {
             }),
             source_id: 0,
             is_debuff: false,
+            pierces_magic_immunity: false,
         });
     }
 

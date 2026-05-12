@@ -39,6 +39,8 @@ pub struct StatusFlags {
     pub hexed: bool,
     /// Cannot be targeted or take damage.
     pub invulnerable: bool,
+    /// Immune to magic damage, most debuffs, and spell targeting.
+    pub magic_immune: bool,
 }
 
 impl StatusFlags {
@@ -52,6 +54,7 @@ impl StatusFlags {
             result.rooted |= f.rooted;
             result.hexed |= f.hexed;
             result.invulnerable |= f.invulnerable;
+            result.magic_immune |= f.magic_immune;
         }
         result
     }
@@ -116,6 +119,8 @@ pub struct Buff {
     pub source_id: u32,
     /// true = negative effect (from enemy), false = positive (from ally).
     pub is_debuff: bool,
+    /// If true, this debuff applies even to magic immune units.
+    pub pierces_magic_immunity: bool,
 }
 
 /// Result of processing one tick of all buffs on a unit.
@@ -303,6 +308,7 @@ mod tests {
             stat_modifier: None,
             source_id: source,
             is_debuff: true,
+            pierces_magic_immunity: false,
         }
     }
 
