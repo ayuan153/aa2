@@ -563,7 +563,8 @@ impl Simulation {
         // Check if current target is still valid
         if let Some(tid) = unit.target
             && let Some(t) = self.units.iter().find(|u| u.id == tid)
-            && t.is_alive() && unit.position.distance(t.position) <= ACQUISITION_RANGE
+            && t.is_alive() && !active_status(&t.buffs).invulnerable
+            && unit.position.distance(t.position) <= ACQUISITION_RANGE
         {
             return; // keep target
         }
@@ -573,6 +574,7 @@ impl Simulation {
         let mut best: Option<(u32, f32)> = None;
         for other in self.units.iter() {
             if other.team == unit_team || !other.is_alive() { continue; }
+            if active_status(&other.buffs).invulnerable { continue; }
             let d = unit_pos.distance(other.position);
             if d <= ACQUISITION_RANGE && (best.is_none() || d < best.unwrap().1) {
                 best = Some((other.id, d));
@@ -694,6 +696,99 @@ impl Simulation {
             let caster_team = self.pending_effects[i].caster_team;
 
             let remove = match &mut self.pending_effects[i].kind {
+                PendingEffectKind::BurrowstrikeTravel {
+                    start_pos,
+                    end_pos,
+                    travel_speed,
+                    damage,
+                    stun_duration_secs,
+                    width,
+                    caustic_finale_damage,
+                    caustic_finale_radius,
+                } => {
+                    let sp = *start_pos;
+                    let ep = *end_pos;
+                    let spd = *travel_speed;
+                    let dmg = *damage;
+                    let stun_secs = *stun_duration_secs;
+                    let w = *width;
+                    let cf_dmg = *caustic_finale_damage;
+                    let _cf_radius = *caustic_finale_radius;
+
+                    // Move caster toward end_pos
+                    let caster_pos = self.units.iter()
+                        .find(|u| u.id == caster_id)
+                        .map(|u| u.position)
+                        .unwrap_or(ep);
+                    let remaining_dist = caster_pos.distance(ep);
+                    let step = spd * TICK_DURATION;
+
+                    if remaining_dist <= step {
+                        // Arrived — set position, remove invuln, apply damage/stun
+                        if let Some(caster) = self.units.iter_mut().find(|u| u.id == caster_id) {
+                            caster.position = ep;
+                            caster.buffs.retain(|b| b.name != "burrowstrike_invuln");
+                        }
+
+                        // Find enemies in line from start to end
+                        let direction = (ep - sp).normalize();
+                        let line_shape = aa2_data::AoeShape::Line { width: w, length: sp.distance(ep) };
+                        let hit_indices = crate::aoe::find_aoe_targets(
+                            &line_shape, sp, direction, &self.units, caster_id, caster_team, true,
+                        );
+
+                        for &idx in &hit_indices {
+                            let actual = apply_magic_resistance(dmg, self.units[idx].magic_resistance);
+                            self.units[idx].hp -= actual;
+                            events.push(CombatEvent::AbilityDamage {
+                                tick,
+                                caster_id,
+                                target_id: self.units[idx].id,
+                                ability_name: self.pending_effects[i].ability_name.clone(),
+                                damage: actual,
+                                damage_type: DamageType::Magical,
+                            });
+                            let stun_ticks = (stun_secs * 30.0) as u32;
+                            let stun_buff = Buff {
+                                name: "stun".to_string(),
+                                remaining_ticks: stun_ticks,
+                                tick_effect: None,
+                                stacking: StackBehavior::RefreshDuration,
+                                dispel_type: DispelType::StrongDispel,
+                                status: StatusFlags { stunned: true, ..StatusFlags::default() },
+                                stat_modifier: None,
+                                source_id: caster_id,
+                                is_debuff: true,
+                            };
+                            apply_buff(&mut self.units[idx].buffs, stun_buff);
+
+                            // Apply Caustic Finale debuff if damage > 0
+                            if cf_dmg > 0.0 {
+                                let cf_buff = Buff {
+                                    name: "caustic_finale".to_string(),
+                                    remaining_ticks: u32::MAX, // permanent until death
+                                    tick_effect: None,
+                                    stacking: StackBehavior::RefreshDuration,
+                                    dispel_type: DispelType::BasicDispel,
+                                    status: StatusFlags::default(),
+                                    stat_modifier: None,
+                                    source_id: caster_id,
+                                    is_debuff: true,
+                                };
+                                apply_buff(&mut self.units[idx].buffs, cf_buff);
+                            }
+                        }
+
+                        true
+                    } else {
+                        // Move caster toward end_pos
+                        let dir = (ep - caster_pos).normalize();
+                        if let Some(caster) = self.units.iter_mut().find(|u| u.id == caster_id) {
+                            caster.position = caster_pos + dir.scale(step);
+                        }
+                        false
+                    }
+                }
                 PendingEffectKind::DarkPactPulse {
                     damage_per_pulse,
                     radius,
@@ -848,6 +943,42 @@ impl Simulation {
         }
         for &(_, uid) in &newly_dead {
             self.combat_log.push(CombatEvent::Death { tick: self.tick, unit_id: uid });
+        }
+        // Caustic Finale: on-death explosion
+        for &(dead_idx, _) in &newly_dead {
+            let dead_pos = self.units[dead_idx].position;
+            let dead_team = self.units[dead_idx].team;
+            // Check if dead unit has caustic_finale buff
+            if let Some(cf_buff) = self.units[dead_idx].buffs.iter().find(|b| b.name == "caustic_finale") {
+                let source_id = cf_buff.source_id;
+                // Find the source's caustic finale damage from their pending effects or abilities
+                // We stored the damage in the buff's source — look up from the source unit's abilities
+                let mut cf_dmg = 0.0_f32;
+                let mut cf_radius = 0.0_f32;
+                for u in self.units.iter() {
+                    if u.id != source_id { continue; }
+                    for ability in &u.abilities {
+                        if ability.level == 0 { continue; }
+                        for effect in &ability.def.effects {
+                            if let aa2_data::Effect::Burrowstrike { caustic_finale_damage, caustic_finale_radius, .. } = effect {
+                                cf_dmg = aa2_data::value_at_level(caustic_finale_damage, ability.level);
+                                cf_radius = *caustic_finale_radius;
+                            }
+                        }
+                    }
+                }
+                if cf_dmg > 0.0 {
+                    // Deal magical damage to all enemies of the dead unit's team within radius
+                    // (enemies of the dead unit = same team as the source)
+                    for u in self.units.iter_mut() {
+                        if u.team == dead_team || !u.is_alive() { continue; }
+                        if dead_pos.distance(u.position) <= cf_radius {
+                            let actual = combat::apply_magic_resistance(cf_dmg, u.magic_resistance);
+                            u.hp -= actual;
+                        }
+                    }
+                }
+            }
         }
         // Glaives INT steal on kill
         for &(dead_idx, _) in &newly_dead {

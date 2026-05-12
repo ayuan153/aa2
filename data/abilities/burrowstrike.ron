@@ -1,8 +1,9 @@
-// Burrowstrike - Sand King's line stun + teleport
-// Instant cast, line AoE stun + magical damage, caster teleports to end point.
+// Burrowstrike - Sand King's line stun + travel
+// Caster travels underground at 2000 u/s, invulnerable during travel.
+// On arrival: line AoE stun + magical damage. Super+ applies Caustic Finale.
 //
 // AA Scaling: L1-3 = Dota L1-3, L4-5 = L3, L6 (Super), L7-8 = L6, L9 (Gaben)
-// Super (6): +0.3s stun, +650 range, applies Caustic Finale (placeholder)
+// Super (6): +0.3s stun, +650 range, applies Caustic Finale
 // Gaben (9): 2 charges
 //
 // Cast behavior: Lazy (won't walk into range to cast)
@@ -18,10 +19,12 @@ AbilityDef(
             stun_duration: [1.2, 1.4, 1.8, 1.8, 1.8, 2.1, 2.1, 2.1, 2.1],
             range: [550.0, 625.0, 775.0, 775.0, 775.0, 1425.0, 1425.0, 1425.0, 1425.0],
             width: 300.0,
-            caster_teleports: true,
+            travel_speed: 2000.0,
+            caustic_finale_damage: [0.0, 0.0, 0.0, 0.0, 0.0, 150.0, 150.0, 150.0, 150.0],
+            caustic_finale_radius: 400.0,
         ),
     ],
-    description: "Sand King burrows underground and tunnels forward, stunning and damaging enemies in a line. Teleports to the end point.",
+    description: "Sand King burrows underground and tunnels forward, stunning and damaging enemies in a line. Invulnerable during travel.",
     aoe_shape: None,
     cast_range: 1425.0,
     cast_behavior: Lazy,

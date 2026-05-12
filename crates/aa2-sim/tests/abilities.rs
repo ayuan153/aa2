@@ -1844,7 +1844,9 @@ fn test_burrowstrike_line_stun() {
             stun_duration: vec![1.2],
             range: vec![550.0],
             width: 300.0,
-            caster_teleports: true,
+            travel_speed: 2000.0,
+            caustic_finale_damage: vec![0.0],
+            caustic_finale_radius: 400.0,
         }],
         description: String::new(),
         aoe_shape: None,
@@ -1868,8 +1870,8 @@ fn test_burrowstrike_line_stun() {
 
     let mut sim = Simulation::new(vec![u0, u1, u2, u3]);
 
-    // Run until cast completes (instant cast point)
-    for _ in 0..10 {
+    // Travel time: 550 / 2000 = 0.275s = ~9 ticks. Run enough for cast + travel.
+    for _ in 0..20 {
         sim.step();
     }
 
@@ -1907,7 +1909,9 @@ fn test_burrowstrike_teleport() {
             stun_duration: vec![1.2],
             range: vec![550.0],
             width: 300.0,
-            caster_teleports: true,
+            travel_speed: 2000.0,
+            caustic_finale_damage: vec![0.0],
+            caustic_finale_radius: 400.0,
         }],
         description: String::new(),
         aoe_shape: None,
@@ -1923,15 +1927,16 @@ fn test_burrowstrike_teleport() {
 
     let mut sim = Simulation::new(vec![u0, u1]);
 
-    // Run until cast completes
-    for _ in 0..10 {
+    // Track max x position reached (caster travels then walks back)
+    let mut max_x = 0.0_f32;
+    for _ in 0..30 {
         sim.step();
+        max_x = max_x.max(sim.units[0].position.x);
     }
 
-    // Caster should have teleported to end point (550 units in direction of target)
-    let caster_pos = sim.units[0].position;
-    assert!((caster_pos.x - 550.0).abs() < 50.0,
-        "Caster should teleport to ~550 along x, got {}", caster_pos.x);
+    // Caster should have reached end point (550 units in direction of target)
+    assert!((max_x - 550.0).abs() < 5.0,
+        "Caster should reach ~550 along x, max was {}", max_x);
 }
 
 #[test]

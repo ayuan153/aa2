@@ -109,13 +109,16 @@ pub enum Effect {
         steal_radius: f32,
         bounce_radius: Vec<f32>,
     },
-    /// Burrowstrike: line AoE stun + damage, caster teleports to end point.
+    /// Burrowstrike: line AoE stun + damage, caster travels at speed to end point.
+    /// During travel, caster is invulnerable and untargetable.
     Burrowstrike {
         damage: Vec<f32>,
         stun_duration: Vec<f32>,
         range: Vec<f32>,
         width: f32,
-        caster_teleports: bool,
+        travel_speed: f32,              // units/sec (2000)
+        caustic_finale_damage: Vec<f32>, // on-death explosion damage (0 = none, >0 at Super+)
+        caustic_finale_radius: f32,      // explosion radius (400)
     },
 }
 

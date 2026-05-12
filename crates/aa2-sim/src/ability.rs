@@ -211,7 +211,8 @@ pub fn execute_ability(
                 });
             }
             Effect::Burrowstrike {
-                damage, stun_duration, range, width, caster_teleports,
+                damage, stun_duration, range, width, travel_speed,
+                caustic_finale_damage, caustic_finale_radius,
             } => {
                 let line_length = value_at_level(range, level);
                 let end_point = if let Some(tpos) = target_pos {
@@ -222,45 +223,43 @@ pub fn execute_ability(
                     caster_pos + Vec2::new(line_length, 0.0)
                 };
 
-                let direction = (end_point - caster_pos).normalize();
-                let line_shape = aa2_data::AoeShape::Line { width: *width, length: line_length };
-                let hit_indices = find_aoe_targets(&line_shape, caster_pos, direction, units, caster_id, caster_team, true);
+                let travel_time_secs = line_length / *travel_speed;
+                let travel_ticks = (travel_time_secs * 30.0) as u32;
 
-                let dmg = value_at_level(damage, level);
-                let stun_secs = value_at_level(stun_duration, level);
-
-                for &idx in &hit_indices {
-                    let actual = apply_magic_resistance(dmg, units[idx].magic_resistance);
-                    units[idx].hp -= actual;
-                    events.push(CombatEvent::AbilityDamage {
-                        tick,
-                        caster_id,
-                        target_id: units[idx].id,
-                        ability_name: ability.name.clone(),
-                        damage: actual,
-                        damage_type: DamageType::Magical,
-                    });
-                    let stun_ticks = (stun_secs * 30.0) as u32;
-                    let stun_buff = Buff {
-                        name: "stun".to_string(),
-                        remaining_ticks: stun_ticks,
+                // Apply invulnerable buff to caster during travel
+                if let Some(caster) = units.iter_mut().find(|u| u.id == caster_id) {
+                    let invuln_buff = Buff {
+                        name: "burrowstrike_invuln".to_string(),
+                        remaining_ticks: travel_ticks + 1,
                         tick_effect: None,
                         stacking: StackBehavior::RefreshDuration,
-                        dispel_type: DispelType::StrongDispel,
-                        status: StatusFlags { stunned: true, ..StatusFlags::default() },
+                        dispel_type: DispelType::Undispellable,
+                        status: StatusFlags { invulnerable: true, stunned: true, ..StatusFlags::default() },
                         stat_modifier: None,
                         source_id: caster_id,
-                        is_debuff: true,
+                        is_debuff: false,
                     };
-                    apply_buff(&mut units[idx].buffs, stun_buff);
+                    apply_buff(&mut caster.buffs, invuln_buff);
                 }
 
-                // Teleport caster to end point
-                if *caster_teleports
-                    && let Some(caster) = units.iter_mut().find(|u| u.id == caster_id)
-                {
-                    caster.position = end_point;
-                }
+                let cf_dmg = value_at_level(caustic_finale_damage, level);
+
+                pending_effects.push(PendingEffect {
+                    caster_id,
+                    caster_team,
+                    ability_name: ability.name.clone(),
+                    kind: PendingEffectKind::BurrowstrikeTravel {
+                        start_pos: caster_pos,
+                        end_pos: end_point,
+                        travel_speed: *travel_speed,
+                        damage: value_at_level(damage, level),
+                        stun_duration_secs: value_at_level(stun_duration, level),
+                        width: *width,
+                        caustic_finale_damage: cf_dmg,
+                        caustic_finale_radius: *caustic_finale_radius,
+                    },
+                    delay_ticks_remaining: 0,
+                });
             }
             _ => {}
         }

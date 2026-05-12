@@ -37,6 +37,8 @@ pub struct StatusFlags {
     pub rooted: bool,
     /// Prevents all actions + sets MS to 140 + disables passives.
     pub hexed: bool,
+    /// Cannot be targeted or take damage.
+    pub invulnerable: bool,
 }
 
 impl StatusFlags {
@@ -49,6 +51,7 @@ impl StatusFlags {
             result.disarmed |= f.disarmed;
             result.rooted |= f.rooted;
             result.hexed |= f.hexed;
+            result.invulnerable |= f.invulnerable;
         }
         result
     }
