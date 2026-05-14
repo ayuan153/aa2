@@ -1,25 +1,27 @@
 // Glaives of Wisdom - Silencer's INT-scaling attack modifier
 // Each attack costs mana and deals bonus magical damage based on wielder's INT.
+// Also temporarily steals INT from the target on each hit.
 // Does NOT pierce debuff immunity (becomes regular attack vs immune targets).
 //
-// AA Scaling: L1=35%, L2=50%, L3=80% INT as bonus magical damage. L4-5=80%.
+// Dota2 base values: dmg factor 0.35/0.50/0.65/0.80, steal 2/3/4/5, dur 10/20/30/40, mana 12/14/16/18
+// AA mapping: L1=Dota L1, L2=Dota L2, L3=Dota L4 (skip Dota L3)
 // Super (L6): Steal +1 INT permanently when enemy dies within 900 radius (persists between rounds)
 // Gaben (L9): Attack bounces to closest enemy within 500 radius of target
 AbilityDef(
     name: "Glaives of Wisdom",
     cooldown: [0.0],
-    mana_cost: [15.0],  // Flat 15 mana per attack at all levels
+    mana_cost: [12.0, 14.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0],
     cast_point: 0.0,
     targeting: Passive,
     effects: [
         GlaivesOfWisdom(
-            // INT damage factor: L1=0.35, L2=0.50, L3=0.80, L4-5=0.80, L6-8=0.80, L9=0.80
+            // INT damage factor: L1=0.35, L2=0.50, L3=0.80 (Dota L4), L4-5=0.80, L6-9=0.80
             int_damage_factor: [0.35, 0.50, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80],
-            // Mana cost per attack (flat 15 at all levels in AA)
-            mana_cost: [15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0],
-            // INT stolen per attack (temporary): L1=2, L2=3, L3=5, L4-5=5, L6-8=5, L9=5
+            // Mana cost per attack: L1=12, L2=14, L3=18 (Dota L4), L4-9=18
+            mana_cost: [12.0, 14.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0],
+            // INT stolen per attack (temporary): L1=2, L2=3, L3=5 (Dota L4), L4-9=5
             int_steal_per_attack: [2.0, 3.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
-            // Steal duration (seconds): L1=10, L2=20, L3=40, L4-5=40, L6-8=40, L9=40
+            // Steal duration (seconds): L1=10, L2=20, L3=40 (Dota L4), L4-9=40
             steal_duration: [10.0, 20.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0],
             // Permanent INT stolen on kill: 0 at base, 1 at Super+
             steal_int_on_kill: [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
@@ -29,7 +31,7 @@ AbilityDef(
             bounce_radius: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 500.0],
         ),
     ],
-    description: "Attacks deal bonus magical damage based on Intelligence. Costs mana per attack.",
+    description: "Attacks deal bonus magical damage based on Intelligence and temporarily steal INT from the target.",
     aoe_shape: None,
     cast_range: 0.0,
 )
